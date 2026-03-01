@@ -21,6 +21,8 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [goal, setGoal] = useState("");
   const [eventDate, setEventDate] = useState("");
+  const [activeBlock, setActiveBlock] = useState<any>(null);
+  const [weeks, setWeeks] = useState<any[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -60,76 +62,91 @@ export default function Home() {
   const handleCreateWeek = async () => {
     if (!user) return;
 
-    const blocksRef = collection(db, "users", user.uid, "trainingBlocks");
+    const weeksCollection = collection(db, "users", user.uid, "trainingWeeks");
 
-    // 1️⃣ Find active block
-    const activeQuery = query(blocksRef, where("status", "==", "active"));
-    const activeSnapshot = await getDocs(activeQuery);
-
-    if (activeSnapshot.empty) {
-      alert("No active training block found. Create a block first.");
-      return;
-    }
-
-    const activeBlockDoc = activeSnapshot.docs[0];
-    const blockId = activeBlockDoc.id;
-
-    // 2️⃣ Create week under active block
-    const weeksRef = collection(
-      db,
-      "users",
-      user.uid,
-      "trainingBlocks",
-      blockId,
-      "trainingWeeks"
-    );
-
-    await addDoc(weeksRef, {
+    await addDoc(weeksCollection, {
       startDate: new Date().toISOString().split("T")[0],
+      mainFocus: goal || "General",
       status: "planned",
       createdAt: serverTimestamp(),
     });
 
-    alert("Training week created under active block");
+    alert("Training week created");
   };
 
-  const handleCreateBlock = async () => {
-    if (!user) return;
+const handleCreateBlock = async () => {
+  if (!user) return;
 
-    const blocksRef = collection(db, "users", user.uid, "trainingBlocks");
+  const blocksRef = collection(db, "users", user.uid, "trainingBlocks");
 
-    // 1️⃣ Find active block
-    const activeQuery = query(blocksRef, where("status", "==", "active"));
-    const activeSnapshot = await getDocs(activeQuery);
+  // 1️⃣ Find existing active block
+  const activeQuery = query(blocksRef, where("status", "==", "active"));
+  const activeSnapshot = await getDocs(activeQuery);
 
-    // 2️⃣ If an active block exists, mark it completed
-    for (const docSnap of activeSnapshot.docs) {
-      await updateDoc(docSnap.ref, {
-        status: "completed",
-        endedAt: serverTimestamp(),
-      });
+  // 2️⃣ Mark existing active blocks as completed
+  for (const docSnap of activeSnapshot.docs) {
+    await updateDoc(docSnap.ref, {
+      status: "completed",
+      endedAt: serverTimestamp(),
+    });
+  }
+
+  // 3️⃣ Hardcode 6-week duration
+  const startDate = new Date();
+  const endDate = new Date();
+  endDate.setDate(startDate.getDate() + 42); // 6 weeks
+
+  const primaryGoal = goal || "Maintenance";
+  const name =
+    primaryGoal === "Maintenance"
+      ? "Maintenance Block"
+      : `${primaryGoal} Block`;
+
+  // 4️⃣ Create the block
+  const blockDocRef = await addDoc(blocksRef, {
+    name,
+    primaryGoal,
+    secondaryGoal: null,
+    startDate: startDate.toISOString().split("T")[0],
+    endDate: endDate.toISOString().split("T")[0],
+    status: "active",
+    createdAt: serverTimestamp(),
+  });
+
+  const blockId = blockDocRef.id;
+
+  // 5️⃣ Generate weeks inside this block
+  let currentStart = new Date(startDate);
+
+  while (currentStart <= endDate) {
+    const currentEnd = new Date(currentStart);
+    currentEnd.setDate(currentStart.getDate() + 6);
+
+    if (currentEnd > endDate) {
+      currentEnd.setTime(endDate.getTime());
     }
 
-    // 3️⃣ Create new block
-    const primaryGoal = goal || "Maintenance";
-    const name =
-      primaryGoal === "Maintenance"
-        ? "Maintenance Block"
-        : `${primaryGoal} Block`;
+    await addDoc(
+      collection(
+        db,
+        "users",
+        user.uid,
+        "trainingBlocks",
+        blockId,
+        "trainingWeeks"
+      ),
+      {
+        startDate: currentStart.toISOString().split("T")[0],
+        endDate: currentEnd.toISOString().split("T")[0],
+        createdAt: serverTimestamp(),
+      }
+    );
 
-    await addDoc(blocksRef, {
-      name,
-      primaryGoal,
-      secondaryGoal: null,
-      startDate: new Date().toISOString().split("T")[0],
-      targetDate: eventDate || null,
-      status: "active",
-      createdAt: serverTimestamp(),
-    });
+    currentStart.setDate(currentStart.getDate() + 7);
+  }
 
-    alert("New training block created");
-  };
-
+  alert("6-week block with weeks generated successfully");
+};
 
   
   const handleLogin = async () => {
@@ -207,7 +224,7 @@ return (
       >
         Create Training Block
       </button>
-
+      
       <button
        onClick={handleCreateWeek}
        className="bg-green-600 text-white px-4 py-2 rounded mt-4"
