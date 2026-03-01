@@ -15,6 +15,7 @@ import {
 import { useEffect, useState } from "react";
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "../lib/firebase";
+import { orderBy } from "firebase/firestore";
 
 
 export default function Home() {
@@ -49,6 +50,41 @@ export default function Home() {
     setEventDate(data.eventDate || "");
 }
     setUser(currentUser);
+    // 🔹 Fetch active block
+    const blocksRef = collection(db, "users", currentUser.uid, "trainingBlocks");
+    const activeQuery = query(blocksRef, where("status", "==", "active"));
+    const activeSnapshot = await getDocs(activeQuery);
+
+    if (!activeSnapshot.empty) {
+      const blockDoc = activeSnapshot.docs[0];
+      setActiveBlock({ id: blockDoc.id, ...blockDoc.data() });
+        
+      const weeksRef = collection(
+          db,
+          "users",
+          currentUser.uid,
+          "trainingBlocks",
+          blockDoc.id,
+          "trainingWeeks"
+        );
+
+   
+  const weeksQuery = query(
+   weeksRef,
+  orderBy("startDate", "asc")
+    );
+
+    const weeksSnapshot = await getDocs(weeksQuery);
+
+  const weeksData = weeksSnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+
+  setWeeks(weeksData);
+  console.log("Active Block:", blockDoc.data());
+  console.log("Weeks:", weeksData);
+}
   } 
    else {
     setUser(null);
