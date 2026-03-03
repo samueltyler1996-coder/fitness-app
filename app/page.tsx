@@ -76,11 +76,35 @@ export default function Home() {
 
           const weeksSnapshot = await getDocs(weeksQuery);
 
-          const weeksData = weeksSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
+          const weeksData = [];
 
+          for (const weekDoc of weeksSnapshot.docs) {
+            const weekId = weekDoc.id;
+
+            const sessionsRef = collection(
+              db,
+              "users",
+              currentUser.uid,
+              "trainingBlocks",
+              blockDoc.id,
+              "trainingWeeks",
+              weekId,
+              "sessions"
+            );
+
+            const sessionsSnapshot = await getDocs(sessionsRef);
+
+            const sessions = sessionsSnapshot.docs.map(sessionDoc => ({
+              id: sessionDoc.id,
+              ...sessionDoc.data(),
+            }));
+
+            weeksData.push({
+              id: weekId,
+              ...weekDoc.data(),
+              sessions,
+            });
+          }
           setWeeks(weeksData);
           console.log("Active Block:", blockDoc.data());
           console.log("Weeks:", weeksData);
@@ -95,20 +119,6 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
-  const handleCreateWeek = async () => {
-    if (!user) return;
-
-    const weeksCollection = collection(db, "users", user.uid, "trainingWeeks");
-
-    await addDoc(weeksCollection, {
-      startDate: new Date().toISOString().split("T")[0],
-      mainFocus: goal || "General",
-      status: "planned",
-      createdAt: serverTimestamp(),
-    });
-
-    alert("Training week created");
-  };
 
   const handleCreateBlock = async () => {
     if (!user) return;
@@ -153,6 +163,7 @@ export default function Home() {
 
     // 5️⃣ Generate weeks inside this block
     let currentStart = new Date(startDate);
+    let weekNumber = 1;
 
     while (currentStart <= endDate) {
       const currentEnd = new Date(currentStart);
@@ -162,7 +173,7 @@ export default function Home() {
         currentEnd.setTime(endDate.getTime());
       }
 
-      await addDoc(
+      const weekRef = await addDoc(
         collection(
           db,
           "users",
@@ -178,6 +189,116 @@ export default function Home() {
         }
       );
 
+      const weekId = weekRef.id;
+
+      // 🔹 Generate 7 placeholder sessions
+      const days = [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+      ];
+
+      for (let i = 0; i < 7; i++) {
+        await addDoc(
+          collection(
+            db,
+            "users",
+            user.uid,
+            "trainingBlocks",
+            blockId,
+            "trainingWeeks",
+            weekId,
+            "sessions"
+          ),
+          {
+            day: days[i],
+            category: null,
+            completed: false,
+            prescription: {},
+            actual: {},
+            aiGenerated: true,
+            manuallyModified: false,
+            createdAt: serverTimestamp(),
+          }
+        );
+      }
+
+      if (weekNumber === 1) {
+        const sessionsRef = collection(
+          db,
+          "users",
+          user.uid,
+          "trainingBlocks",
+          blockId,
+          "trainingWeeks",
+          weekId,
+          "sessions"
+        );
+
+        const sessionsSnapshot = await getDocs(sessionsRef);
+
+        const sessions = sessionsSnapshot.docs;
+
+        const prescriptions = [
+          { category: "Rest", prescription: {} },
+          {
+            category: "Run",
+            prescription: {
+              type: "easy",
+              distanceKm: 5,
+              targetPace: "5:30/km",
+              guidance: "Comfortable aerobic effort"
+            }
+          },
+          {
+            category: "Strength",
+            prescription: {
+              focus: "lower",
+              guidance: "Posterior chain emphasis"
+            }
+          },
+          {
+            category: "Run",
+            prescription: {
+              type: "tempo",
+              distanceKm: 6,
+              targetPace: "4:50/km",
+              guidance: "Controlled threshold effort"
+            }
+          },
+          { category: "Rest", prescription: {} },
+          {
+            category: "Run",
+            prescription: {
+              type: "easy",
+              distanceKm: 8,
+              targetPace: "5:30/km"
+            }
+          },
+          {
+            category: "Run",
+            prescription: {
+              type: "long",
+              distanceKm: 14,
+              targetPace: "5:45/km",
+              guidance: "Steady aerobic long run"
+            }
+          }
+        ];
+
+        for (let i = 0; i < sessions.length; i++) {
+          await updateDoc(sessions[i].ref, {
+            category: prescriptions[i].category,
+            prescription: prescriptions[i].prescription
+          });
+        }
+      }
+
+      weekNumber++;
       currentStart.setDate(currentStart.getDate() + 7);
     }
 
@@ -210,6 +331,92 @@ export default function Home() {
 
     alert("Profile saved");
   };
+
+
+
+  const toggleSession = async (
+    blockId: string,
+    weekId: string,
+    sessionId: string,
+    currentValue: boolean
+  ) => {
+    if (!user) return;
+
+    const sessionRef = doc(
+      db,
+      "users",
+      user.uid,
+      "trainingBlocks",
+      blockId,
+      "trainingWeeks",
+      weekId,
+      "sessions",
+      sessionId
+    );
+
+    await updateDoc(sessionRef, {
+      completed: !currentValue,
+    });
+
+    // Optimistically update UI state
+    setWeeks((prevWeeks) =>
+      prevWeeks.map((week) =>
+        week.id === weekId
+          ? {
+            ...week,
+            sessions: week.sessions.map((session: any) =>
+              session.id === sessionId
+                ? { ...session, completed: !currentValue }
+                : session
+            ),
+          }
+          : week
+      )
+    );
+  };
+
+  const updateSessionCategory = async (
+    blockId: string,
+    weekId: string,
+    sessionId: string,
+    newCategory: string
+  ) => {
+    if (!user) return;
+
+    const sessionRef = doc(
+      db,
+      "users",
+      user.uid,
+      "trainingBlocks",
+      blockId,
+      "trainingWeeks",
+      weekId,
+      "sessions",
+      sessionId
+    );
+
+    await updateDoc(sessionRef, {
+      category: newCategory,
+    });
+
+    // Optimistically update local state
+    setWeeks((prevWeeks) =>
+      prevWeeks.map((week) =>
+        week.id === weekId
+          ? {
+            ...week,
+            sessions: week.sessions.map((session: any) =>
+              session.id === sessionId
+                ? { ...session, category: newCategory }
+                : session
+            ),
+          }
+          : week
+      )
+    );
+  };
+
+
 
   if (!user) {
     return (
@@ -246,14 +453,86 @@ export default function Home() {
 
           <div className="flex flex-col gap-2">
             {weeks.map((week, index) => (
-              <div
-                key={week.id}
-                className="p-3 border rounded flex justify-between"
-              >
-                <span>Week {index + 1}</span>
-                <span>
-                  {week.startDate} → {week.endDate}
-                </span>
+              <div key={week.id} className="p-4 border rounded">
+                <div className="flex justify-between mb-2">
+                  <span className="font-semibold">Week {index + 1}</span>
+                  <span>
+                    {week.startDate} → {week.endDate}
+                  </span>
+                </div>
+
+                <div className="ml-4 flex flex-col gap-1">
+                  {week.sessions?.map((session: any) => (
+                    <div
+                      key={session.id}
+                      onClick={() =>
+                        toggleSession(
+                          activeBlock.id,
+                          week.id,
+                          session.id,
+                          session.completed
+                        )
+                      }
+                      className="border-b py-2 cursor-pointer hover:bg-gray-50"
+                    >
+                      <div className="flex flex-col w-full">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium">{session.day}</span>
+
+                          <div className="flex items-center gap-3">
+                            <select
+                              value={session.category || ""}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) =>
+                                updateSessionCategory(
+                                  activeBlock.id,
+                                  week.id,
+                                  session.id,
+                                  e.target.value
+                                )
+                              }
+                              className="border rounded px-2 py-1 text-xs"
+                            >
+                              <option value="">Select</option>
+                              <option value="Run">Run</option>
+                              <option value="Strength">Strength</option>
+                              <option value="Rest">Rest</option>
+                            </select>
+
+                            <span>{session.completed ? "✅" : "⬜"}</span>
+                          </div>
+                        </div>
+
+                        {session.prescription &&
+                          Object.keys(session.prescription).length > 0 && (
+                            <div className="text-xs text-gray-600 mt-1">
+                              {session.category === "Run" && (
+                                <>
+                                  <div>Type: {session.prescription.type}</div>
+                                  <div>Distance: {session.prescription.distanceKm} km</div>
+                                  <div>Pace: {session.prescription.targetPace}</div>
+                                  {session.prescription.guidance && (
+                                    <div>{session.prescription.guidance}</div>
+                                  )}
+                                </>
+                              )}
+
+                              {session.category === "Strength" && (
+                                <>
+                                  <div>Focus: {session.prescription.focus}</div>
+                                  {session.prescription.guidance && (
+                                    <div>{session.prescription.guidance}</div>
+                                  )}
+                                </>
+                              )}
+
+                              {session.category === "Rest" && <div>Rest day</div>}
+                            </div>
+                          )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -290,12 +569,6 @@ export default function Home() {
           Create Training Block
         </button>
 
-        <button
-          onClick={handleCreateWeek}
-          className="bg-green-600 text-white px-4 py-2 rounded mt-4"
-        >
-          Create Training Week
-        </button>
 
       </div>
     </main>
