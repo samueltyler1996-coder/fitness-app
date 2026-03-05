@@ -24,6 +24,7 @@ export default function Home() {
   const [eventDate, setEventDate] = useState("");
   const [activeBlock, setActiveBlock] = useState<any>(null);
   const [weeks, setWeeks] = useState<any[]>([]);
+  const [todaySession, setTodaySession] = useState<any>(null);
   const [expandedWeek, setExpandedWeek] = useState<string | null>(null);
 
   useEffect(() => {
@@ -107,6 +108,21 @@ export default function Home() {
             });
           }
           setWeeks(weeksData);
+
+          const today = new Date().toLocaleDateString("en-US", {
+            weekday: "long",
+          });
+
+          for (const week of weeksData) {
+            const session = week.sessions?.find(
+              (s: any) => s.day === today
+            );
+
+            if (session) {
+              setTodaySession(session);
+              break;
+            }
+          }
           console.log("Active Block:", blockDoc.data());
           console.log("Weeks:", weeksData);
         }
@@ -445,6 +461,36 @@ export default function Home() {
           <p><strong>Name:</strong> {activeBlock.name}</p>
           <p><strong>Start:</strong> {activeBlock.startDate}</p>
           <p><strong>End:</strong> {activeBlock.endDate}</p>
+        </div>
+      )}
+
+      {todaySession && (
+        <div className="mt-6 p-4 border rounded w-full max-w-md bg-gray-50">
+          <h2 className="text-lg font-semibold mb-2">Today's Workout</h2>
+
+          <div className="text-sm">
+            <div className="font-medium">{todaySession.day}</div>
+
+            {todaySession.category === "Run" && (
+              <>
+                <div>Type: {todaySession.prescription?.type}</div>
+                <div>Distance: {todaySession.prescription?.distanceKm} km</div>
+                <div>Pace: {todaySession.prescription?.targetPace}</div>
+                <div>{todaySession.prescription?.guidance}</div>
+              </>
+            )}
+
+            {todaySession.category === "Strength" && (
+              <>
+                <div>Focus: {todaySession.prescription?.focus}</div>
+                <div>{todaySession.prescription?.guidance}</div>
+              </>
+            )}
+
+            {todaySession.category === "Rest" && (
+              <div>Rest day</div>
+            )}
+          </div>
         </div>
       )}
 
