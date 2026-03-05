@@ -96,10 +96,24 @@ export default function Home() {
 
             const sessionsSnapshot = await getDocs(sessionsRef);
 
-            const sessions = sessionsSnapshot.docs.map(sessionDoc => ({
-              id: sessionDoc.id,
-              ...sessionDoc.data(),
-            }));
+            const sessions = sessionsSnapshot.docs
+              .map(sessionDoc => ({
+                id: sessionDoc.id,
+                ...sessionDoc.data(),
+              }))
+              .sort((a: any, b: any) => {
+                const order = [
+                  "Monday",
+                  "Tuesday",
+                  "Wednesday",
+                  "Thursday",
+                  "Friday",
+                  "Saturday",
+                  "Sunday",
+                ];
+
+                return order.indexOf(a.day) - order.indexOf(b.day);
+              });
 
             weeksData.push({
               id: weekId,
@@ -109,20 +123,26 @@ export default function Home() {
           }
           setWeeks(weeksData);
 
-          const today = new Date().toLocaleDateString("en-US", {
-            weekday: "long",
-          });
+          const today = new Date().toISOString().split("T")[0];
+          const todayDate = new Date(today);
+          const todayDay = todayDate.toLocaleDateString("en-US", { weekday: "long" });
+          for (const week of weeksData as any[]) {
+            const start = new Date(week.startDate);
+            const end = new Date(week.endDate);
 
-          for (const week of weeksData) {
-            const session = week.sessions?.find(
-              (s: any) => s.day === today
-            );
+            if (todayDate >= start && todayDate <= end) {
+              const session = week.sessions?.find(
+                (s: any) => s.day === todayDay
+              );
 
-            if (session) {
-              setTodaySession(session);
+              if (session) {
+                setTodaySession(session);
+              }
+
               break;
             }
           }
+
           console.log("Active Block:", blockDoc.data());
           console.log("Weeks:", weeksData);
         }
