@@ -24,6 +24,7 @@ export default function Home() {
   const [eventDate, setEventDate] = useState("");
   const [activeBlock, setActiveBlock] = useState<any>(null);
   const [weeks, setWeeks] = useState<any[]>([]);
+  const [expandedWeek, setExpandedWeek] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -454,89 +455,97 @@ export default function Home() {
           <div className="flex flex-col gap-2">
             {weeks.map((week, index) => (
               <div key={week.id} className="p-4 border rounded">
-                <div className="flex justify-between mb-2">
+                <div
+                  onClick={() =>
+                    setExpandedWeek(expandedWeek === week.id ? null : week.id)
+                  }
+                  className="flex justify-between mb-2 cursor-pointer"
+                >
                   <span className="font-semibold">Week {index + 1}</span>
                   <span>
                     {week.startDate} → {week.endDate}
                   </span>
                 </div>
 
-                <div className="ml-4 flex flex-col gap-1">
-                  {week.sessions?.map((session: any) => (
-                    <div
-                      key={session.id}
-                      onClick={() =>
-                        toggleSession(
-                          activeBlock.id,
-                          week.id,
-                          session.id,
-                          session.completed
-                        )
-                      }
-                      className="border-b py-2 cursor-pointer hover:bg-gray-50"
-                    >
-                      <div className="flex flex-col w-full">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium">{session.day}</span>
+                {expandedWeek === week.id && (
+                  <div className="ml-4 flex flex-col gap-1">
+                    {week.sessions?.map((session: any) => (
+                      <div
+                        key={session.id}
+                        onClick={() =>
+                          toggleSession(
+                            activeBlock.id,
+                            week.id,
+                            session.id,
+                            session.completed
+                          )
+                        }
+                        className="border-b py-2 cursor-pointer hover:bg-gray-50"
+                      >
+                        <div className="flex flex-col w-full">
+                          <div className="flex justify-between items-center">
+                            <span className="font-medium">{session.day}</span>
 
-                          <div className="flex items-center gap-3">
-                            <select
-                              value={session.category || ""}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={(e) =>
-                                updateSessionCategory(
-                                  activeBlock.id,
-                                  week.id,
-                                  session.id,
-                                  e.target.value
-                                )
-                              }
-                              className="border rounded px-2 py-1 text-xs"
-                            >
-                              <option value="">Select</option>
-                              <option value="Run">Run</option>
-                              <option value="Strength">Strength</option>
-                              <option value="Rest">Rest</option>
-                            </select>
+                            <div className="flex items-center gap-3">
+                              <select
+                                value={session.category || ""}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) =>
+                                  updateSessionCategory(
+                                    activeBlock.id,
+                                    week.id,
+                                    session.id,
+                                    e.target.value
+                                  )
+                                }
+                                className="border rounded px-2 py-1 text-xs"
+                              >
+                                <option value="">Select</option>
+                                <option value="Run">Run</option>
+                                <option value="Strength">Strength</option>
+                                <option value="Rest">Rest</option>
+                              </select>
 
-                            <span>{session.completed ? "✅" : "⬜"}</span>
-                          </div>
-                        </div>
-
-                        {session.prescription &&
-                          Object.keys(session.prescription).length > 0 && (
-                            <div className="text-xs text-gray-600 mt-1">
-                              {session.category === "Run" && (
-                                <>
-                                  <div>Type: {session.prescription.type}</div>
-                                  <div>Distance: {session.prescription.distanceKm} km</div>
-                                  <div>Pace: {session.prescription.targetPace}</div>
-                                  {session.prescription.guidance && (
-                                    <div>{session.prescription.guidance}</div>
-                                  )}
-                                </>
-                              )}
-
-                              {session.category === "Strength" && (
-                                <>
-                                  <div>Focus: {session.prescription.focus}</div>
-                                  {session.prescription.guidance && (
-                                    <div>{session.prescription.guidance}</div>
-                                  )}
-                                </>
-                              )}
-
-                              {session.category === "Rest" && <div>Rest day</div>}
+                              <span>{session.completed ? "✅" : "⬜"}</span>
                             </div>
-                          )}
+                          </div>
+
+                          {session.prescription &&
+                            Object.keys(session.prescription).length > 0 && (
+                              <div className="text-xs text-gray-600 mt-1">
+                                {session.category === "Run" && (
+                                  <>
+                                    <div>Type: {session.prescription.type}</div>
+                                    <div>Distance: {session.prescription.distanceKm} km</div>
+                                    <div>Pace: {session.prescription.targetPace}</div>
+                                    {session.prescription.guidance && (
+                                      <div>{session.prescription.guidance}</div>
+                                    )}
+                                  </>
+                                )}
+
+                                {session.category === "Strength" && (
+                                  <>
+                                    <div>Focus: {session.prescription.focus}</div>
+                                    {session.prescription.guidance && (
+                                      <div>{session.prescription.guidance}</div>
+                                    )}
+                                  </>
+                                )}
+
+                                {session.category === "Rest" && <div>Rest day</div>}
+                              </div>
+                            )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
+
       )}
 
       <div className="flex flex-col gap-3 mt-6">
