@@ -7,7 +7,7 @@ import {
 } from "firebase/firestore";
 import { signInWithPopup, signOut, GoogleAuthProvider, onAuthStateChanged, User } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
-import { TrainingBlock, TrainingWeek, Session, Category, Day } from "../lib/types";
+import { TrainingBlock, TrainingWeek, Session, Category, Day, Actual } from "../lib/types";
 import TodayWorkout from "../components/TodayWorkout";
 import ActiveBlock from "../components/ActiveBlock";
 import TrainingWeeks from "../components/TrainingWeeks";
@@ -213,6 +213,17 @@ export default function Home() {
     ));
   };
 
+  const logActual = async (blockId: string, weekId: string, sessionId: string, actual: Actual) => {
+    if (!user) return;
+    const sessionRef = doc(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions", sessionId);
+    await updateDoc(sessionRef, { actual });
+    setWeeks(prev => prev.map(week =>
+      week.id === weekId
+        ? { ...week, sessions: week.sessions.map(s => s.id === sessionId ? { ...s, actual } : s) }
+        : week
+    ));
+  };
+
   const updateSessionCategory = async (blockId: string, weekId: string, sessionId: string, newCategory: Category) => {
     if (!user) return;
     const sessionRef = doc(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions", sessionId);
@@ -277,6 +288,7 @@ export default function Home() {
           onToggleExpand={(id) => setExpandedWeek(expandedWeek === id ? null : id)}
           onToggleSession={toggleSession}
           onCategoryChange={updateSessionCategory}
+          onLogActual={logActual}
         />
       )}
 

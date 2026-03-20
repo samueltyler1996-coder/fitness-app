@@ -1,4 +1,4 @@
-import { TrainingWeek, Category, Day } from "../lib/types";
+import { TrainingWeek, Category, Day, Actual } from "../lib/types";
 import WeekCard from "./WeekCard";
 
 interface Props {
@@ -10,11 +10,12 @@ interface Props {
   onToggleExpand: (weekId: string) => void;
   onToggleSession: (blockId: string, weekId: string, sessionId: string, current: boolean) => void;
   onCategoryChange: (blockId: string, weekId: string, sessionId: string, category: Category) => void;
+  onLogActual: (blockId: string, weekId: string, sessionId: string, actual: Actual) => void;
 }
 
 export default function TrainingWeeks({
   weeks, blockId, expandedWeek, currentWeekId, todayDay,
-  onToggleExpand, onToggleSession, onCategoryChange
+  onToggleExpand, onToggleSession, onCategoryChange, onLogActual
 }: Props) {
   return (
     <div>
@@ -32,6 +33,7 @@ export default function TrainingWeeks({
             onToggleExpand={() => onToggleExpand(week.id)}
             onToggleSession={onToggleSession}
             onCategoryChange={onCategoryChange}
+            onLogActual={onLogActual}
           />
         ))}
       </div>

@@ -9,13 +9,21 @@ export interface Prescription {
   focus?: string;
 }
 
+export interface Actual {
+  distanceKm?: number | null;
+  pace?: string | null;
+  effort?: "easy" | "moderate" | "hard" | null;
+  notes?: string | null;
+  rawText?: string;
+}
+
 export interface Session {
   id: string;
   day: Day;
   category: Category;
   completed: boolean;
   prescription: Prescription;
-  actual: Record<string, unknown>;
+  actual: Actual;
   aiGenerated: boolean;
   manuallyModified: boolean;
 }
