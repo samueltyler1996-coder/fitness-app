@@ -28,7 +28,7 @@ export default function SessionRow({ session, blockId, weekId, isToday, onToggle
   const isRun = session.category === "Run";
   const isStrength = session.category === "Strength";
   const isRest = session.category === "Rest";
-  const runLabel = RUN_TYPE_LABEL[session.prescription?.type ?? ""] ?? session.prescription?.type ?? "";
+  const runLabel = RUN_TYPE_LABEL[session.prescription?.type ?? ""] ?? "Run";
   const hasActual = session.actual && Object.keys(session.actual).length > 0;
 
   const handleParse = async () => {
@@ -86,9 +86,11 @@ export default function SessionRow({ session, blockId, weekId, isToday, onToggle
         </div>
 
         <div className="flex items-center gap-2">
-          {isRun && runLabel && <span className="text-xs text-gray-500">{runLabel}</span>}
+          {isRun && runLabel && (
+            <span className="text-xs text-gray-500 truncate max-w-[140px]">{runLabel}</span>
+          )}
           {isStrength && session.prescription?.focus && (
-            <span className="text-xs text-gray-500 capitalize">{session.prescription.focus} strength</span>
+            <span className="text-xs text-gray-500 capitalize truncate max-w-[140px]">{session.prescription.focus} strength</span>
           )}
           {isRest && <span className="text-xs text-gray-400">Rest</span>}
           <span className="text-gray-300 text-xs">{expanded ? "▲" : "▼"}</span>

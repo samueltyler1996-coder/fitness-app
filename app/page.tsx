@@ -7,10 +7,11 @@ import {
 } from "firebase/firestore";
 import { signInWithPopup, signOut, GoogleAuthProvider, onAuthStateChanged, User } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
-import { TrainingBlock, TrainingWeek, Session, Category, Day, Actual } from "../lib/types";
+import { TrainingBlock, TrainingWeek, Session, Category, Day, Actual, SessionChange } from "../lib/types";
 import TodayWorkout from "../components/TodayWorkout";
 import ActiveBlock from "../components/ActiveBlock";
 import TrainingWeeks from "../components/TrainingWeeks";
+import CoachChat from "../components/CoachChat";
 
 const DAY_ORDER: Day[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -213,6 +214,25 @@ export default function Home() {
     ));
   };
 
+  const applyChanges = async (changes: SessionChange[]) => {
+    if (!user || !activeBlock) return;
+    for (const change of changes) {
+      const sessionRef = doc(db, "users", user.uid, "trainingBlocks", activeBlock.id, "trainingWeeks", change.weekId, "sessions", change.sessionId);
+      await updateDoc(sessionRef, { category: change.category, prescription: change.prescription, manuallyModified: true });
+    }
+    setWeeks(prev => prev.map(week => {
+      const weekChanges = changes.filter(c => c.weekId === week.id);
+      if (weekChanges.length === 0) return week;
+      return {
+        ...week,
+        sessions: week.sessions.map(s => {
+          const change = weekChanges.find(c => c.sessionId === s.id);
+          return change ? { ...s, category: change.category, prescription: change.prescription, manuallyModified: true } : s;
+        }),
+      };
+    }));
+  };
+
   const logActual = async (blockId: string, weekId: string, sessionId: string, actual: Actual) => {
     if (!user) return;
     const sessionRef = doc(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions", sessionId);
@@ -277,6 +297,10 @@ export default function Home() {
       <TodayWorkout session={todaySession} />
 
       {activeBlock && <ActiveBlock block={activeBlock} weeks={weeks} />}
+
+      {weeks.length > 0 && (
+        <CoachChat weeks={weeks} onApplyChanges={applyChanges} />
+      )}
 
       {weeks.length > 0 && activeBlock && (
         <TrainingWeeks

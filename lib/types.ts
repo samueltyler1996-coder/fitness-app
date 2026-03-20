@@ -35,6 +35,19 @@ export interface TrainingWeek {
   sessions: Session[];
 }
 
+export interface SessionChange {
+  weekId: string;
+  sessionId: string;
+  day: string;
+  category: Category;
+  prescription: Prescription;
+}
+
+export interface AdaptResponse {
+  summary: string;
+  changes: SessionChange[];
+}
+
 export interface TrainingBlock {
   id: string;
   name: string;

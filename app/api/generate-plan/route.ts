@@ -42,7 +42,7 @@ Return ONLY a valid JSON object with this exact structure, no markdown, no expla
 Rules:
 - Every week must have exactly 7 sessions, one per day Monday through Sunday
 - category must be exactly "Run", "Strength", or "Rest"
-- For Run sessions include: type (easy/tempo/long/intervals), distanceKm (number), targetPace (string), guidance (string)
+- For Run sessions include: type (must be exactly "easy", "tempo", "long", or "intervals" — no other values), distanceKm (number), targetPace (string), guidance (string)
 - For Strength sessions include: focus (string), guidance (string)
 - For Rest sessions prescription is {}
 - Build volume progressively across the ${weeks} weeks
