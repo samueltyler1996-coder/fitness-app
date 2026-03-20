@@ -21,6 +21,7 @@ export default function Home() {
   const [activeBlock, setActiveBlock] = useState<TrainingBlock | null>(null);
   const [weeks, setWeeks] = useState<TrainingWeek[]>([]);
   const [expandedWeek, setExpandedWeek] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // Derived: today's session comes from weeks state — never stored separately
   const todayISO = new Date().toISOString().split("T")[0];
@@ -98,6 +99,7 @@ export default function Home() {
       } else {
         setUser(null);
       }
+      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -230,6 +232,14 @@ export default function Home() {
     ));
   };
 
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        <div className="text-gray-400 text-sm">Loading...</div>
+      </main>
+    );
+  }
+
   if (!user) {
     return (
       <main className="flex min-h-screen items-center justify-center">
@@ -256,6 +266,14 @@ export default function Home() {
         </button>
       </div>
 
+      {(goal || eventDate) && (
+        <div className="flex items-center gap-3 text-sm text-gray-600">
+          {goal && <span className="font-medium">{goal}</span>}
+          {goal && eventDate && <span className="text-gray-300">·</span>}
+          {eventDate && <span>Race day: {eventDate}</span>}
+        </div>
+      )}
+
       <TodayWorkout session={todaySession} />
 
       {activeBlock && <ActiveBlock block={activeBlock} weeks={weeks} />}
@@ -266,6 +284,7 @@ export default function Home() {
           blockId={activeBlock.id}
           expandedWeek={expandedWeek}
           currentWeekId={currentWeek?.id ?? null}
+          todayDay={todayDay}
           onToggleExpand={(id) => setExpandedWeek(expandedWeek === id ? null : id)}
           onToggleSession={toggleSession}
           onCategoryChange={updateSessionCategory}

@@ -4,19 +4,22 @@ interface Props {
   session: Session;
   blockId: string;
   weekId: string;
+  isToday?: boolean;
   onToggle: (blockId: string, weekId: string, sessionId: string, current: boolean) => void;
   onCategoryChange: (blockId: string, weekId: string, sessionId: string, category: Category) => void;
 }
 
-export default function SessionRow({ session, blockId, weekId, onToggle, onCategoryChange }: Props) {
+export default function SessionRow({ session, blockId, weekId, isToday, onToggle, onCategoryChange }: Props) {
   return (
     <div
       onClick={() => onToggle(blockId, weekId, session.id, session.completed)}
-      className="border-b py-2 cursor-pointer hover:bg-gray-50"
+      className={`border-b py-2 cursor-pointer ${isToday ? "bg-blue-50 -mx-4 px-4" : "hover:bg-gray-50"}`}
     >
       <div className="flex flex-col w-full">
         <div className="flex justify-between items-center">
-          <span className="font-medium">{session.day}</span>
+          <span className={`font-medium ${isToday ? "text-blue-700" : ""}`}>
+            {session.day}{isToday && <span className="ml-2 text-xs font-normal text-blue-500">Today</span>}
+          </span>
 
           <div className="flex items-center gap-3">
             <select

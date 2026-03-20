@@ -1,4 +1,4 @@
-import { TrainingWeek, Category } from "../lib/types";
+import { TrainingWeek, Category, Day } from "../lib/types";
 import SessionRow from "./SessionRow";
 
 interface Props {
@@ -6,6 +6,7 @@ interface Props {
   index: number;
   isExpanded: boolean;
   isCurrentWeek: boolean;
+  todayDay: Day;
   blockId: string;
   onToggleExpand: () => void;
   onToggleSession: (blockId: string, weekId: string, sessionId: string, current: boolean) => void;
@@ -13,7 +14,7 @@ interface Props {
 }
 
 export default function WeekCard({
-  week, index, isExpanded, isCurrentWeek, blockId,
+  week, index, isExpanded, isCurrentWeek, todayDay, blockId,
   onToggleExpand, onToggleSession, onCategoryChange
 }: Props) {
   const activeSessions = week.sessions.filter(s => s.category && s.category !== "Rest");
@@ -48,6 +49,7 @@ export default function WeekCard({
               session={session}
               blockId={blockId}
               weekId={week.id}
+              isToday={isCurrentWeek && session.day === todayDay}
               onToggle={onToggleSession}
               onCategoryChange={onCategoryChange}
             />
