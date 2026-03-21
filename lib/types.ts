@@ -168,3 +168,38 @@ export interface AdaptResponse {
   summary: string;
   changes: SessionChange[];
 }
+
+// ─── Incidents ────────────────────────────────────────────────────────────────
+
+export type IncidentType =
+  | "illness"
+  | "injury"
+  | "missed_session"
+  | "scheduling_conflict"
+  | "fatigue"
+  | "general";
+
+export interface MissedSessionOption {
+  id: string;
+  label: string;
+  description: string;
+  changes: SessionChange[];
+}
+
+export interface IncidentPriorContext {
+  type: IncidentType;
+  severity?: string | null;
+  affectedModality?: string | null;
+  affectedDay?: string | null;
+}
+
+export interface IncidentResponse {
+  incidentType: IncidentType;
+  severity?: string | null;
+  affectedModality?: string | null;
+  summary: string | null;
+  changes: SessionChange[];
+  followUpChips?: string[] | null;
+  options?: MissedSessionOption[] | null;
+  priorContext?: IncidentPriorContext | null;
+}

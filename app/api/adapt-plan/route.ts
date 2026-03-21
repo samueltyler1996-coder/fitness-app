@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export async function POST(req: NextRequest) {
-  const { messages, currentChanges, weeks, coachHistory } = await req.json();
+  const { messages, currentChanges, weeks, coachHistory, insights } = await req.json();
 
   const today = new Date(new Date().toISOString().split("T")[0]);
   const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -63,9 +63,16 @@ export async function POST(req: NextRequest) {
       }).join("\n")}\n\n`
     : "";
 
+  const insightsContext = insights?.length > 0
+    ? `Athlete adherence patterns (from recent training history — use these to inform your recommendations):\n${insights.map((s: any) => {
+        const prefix = s.type === "warning" ? "⚠" : s.type === "positive" ? "✓" : "ℹ";
+        return `- ${prefix} ${s.message}`;
+      }).join("\n")}\n\n`
+    : "";
+
   const prompt = `You are an adaptive running and fitness coach having a conversation with an athlete about adjusting their training plan.
 
-${historyContext}Here is the conversation so far:
+${historyContext}${insightsContext}Here is the conversation so far:
 
 ${conversationHistory}
 

@@ -5,14 +5,14 @@ import {
   doc, setDoc, getDoc, collection, addDoc, serverTimestamp,
   query, where, getDocs, updateDoc, orderBy, writeBatch, limit
 } from "firebase/firestore";
-import Link from "next/link";
 import { signInWithPopup, signOut, GoogleAuthProvider, onAuthStateChanged, User } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
 import { TrainingBlock, TrainingWeek, Session, Category, Day, Actual, Prescription, SessionChange, CoachSessionChange, CoachSessionLog } from "../lib/types";
-import TodayWorkout from "../components/TodayWorkout";
-import ActiveBlock from "../components/ActiveBlock";
-import TrainingWeeks from "../components/TrainingWeeks";
+import TodayView from "../components/TodayView";
+import PlanView from "../components/PlanView";
+import ReviewView from "../components/ReviewView";
 import CoachChat from "../components/CoachChat";
+import TrainingWeeks from "../components/TrainingWeeks";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -26,6 +26,7 @@ export default function Home() {
   const [coachHistory, setCoachHistory] = useState<CoachSessionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [view, setView] = useState<"today" | "plan" | "review">("today");
 
   const todayISO = new Date().toISOString().split("T")[0];
   const todayDate = new Date(todayISO);
@@ -158,8 +159,6 @@ export default function Home() {
       await updateDoc(docSnap.ref, { status: "completed", endedAt: serverTimestamp() });
     }
 
-    // Week 1: today → coming Sunday. Week 2+: Monday → Sunday.
-    // Use noon to avoid UTC offset flipping the date back one day (e.g. BST = UTC+1)
     const today = new Date();
     today.setHours(12, 0, 0, 0);
     const daysUntilSunday = today.getDay() === 0 ? 0 : 7 - today.getDay();
@@ -366,50 +365,106 @@ export default function Home() {
       <div className="flex justify-between items-center">
         <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400">{user.displayName}</p>
         <div className="flex items-center gap-4">
-          <span className="text-[10px] tracking-[0.15em] uppercase text-stone-900 font-semibold">Today</span>
-          <Link href="/plan" className="text-[10px] tracking-[0.15em] uppercase text-stone-400 hover:text-stone-700 transition-colors">Plan</Link>
+          <button
+            onClick={() => setView("today")}
+            className={`text-[10px] tracking-[0.15em] uppercase transition-colors ${view === "today" ? "text-stone-900 font-semibold" : "text-stone-400 hover:text-stone-700"}`}
+          >
+            Today
+          </button>
+          <button
+            onClick={() => setView("plan")}
+            className={`text-[10px] tracking-[0.15em] uppercase transition-colors ${view === "plan" ? "text-stone-900 font-semibold" : "text-stone-400 hover:text-stone-700"}`}
+          >
+            Plan
+          </button>
+          <button
+            onClick={() => setView("review")}
+            className={`text-[10px] tracking-[0.15em] uppercase transition-colors ${view === "review" ? "text-stone-900 font-semibold" : "text-stone-400 hover:text-stone-700"}`}
+          >
+            Review
+          </button>
           <button onClick={() => signOut(auth)} className="text-[10px] tracking-[0.15em] uppercase text-stone-400 hover:text-stone-700 transition-colors">
             Sign out
           </button>
         </div>
       </div>
 
-      <TodayWorkout
-        session={todaySession}
-        blockId={activeBlock?.id ?? null}
-        weekId={currentWeek?.id ?? null}
-        onToggle={toggleSession}
-        onLogActual={logActual}
-      />
-
-      {activeBlock && <ActiveBlock block={activeBlock} weeks={weeks} goal={goal} eventDate={eventDate} />}
-
-      {weeks.length > 0 && (
-        <CoachChat weeks={weeks} coachHistory={coachHistory} onApplyChanges={applyChanges} />
+      {/* Today: TodayWorkout + ActiveBlock */}
+      {view === "today" && (
+        <TodayView
+          activeBlock={activeBlock}
+          weeks={weeks}
+          currentWeek={currentWeek}
+          todaySession={todaySession}
+          todayDay={todayDay}
+          goal={goal}
+          eventDate={eventDate}
+          onToggleSession={toggleSession}
+          onLogActual={logActual}
+        />
       )}
 
-      {weeks.length > 0 && activeBlock && (
-        <TrainingWeeks
+      {/* Plan view */}
+      {view === "plan" && (
+        <PlanView
+          activeBlock={activeBlock}
           weeks={weeks}
-          blockId={activeBlock.id}
-          blockGoal={goal || activeBlock.primaryGoal}
-          expandedWeek={expandedWeek}
-          currentWeekId={currentWeek?.id ?? null}
+          currentWeek={currentWeek}
           todayDay={todayDay}
-          onToggleExpand={(id) => setExpandedWeek(expandedWeek === id ? null : id)}
+          goal={goal}
+          eventDate={eventDate}
+          creating={creating}
+          onGoalChange={setGoal}
+          onEventDateChange={setEventDate}
+          onSave={handleSave}
+          onCreateBlock={handleCreateBlock}
           onToggleSession={toggleSession}
-          onCategoryChange={updateSessionCategory}
           onLogActual={logActual}
+          onCategoryChange={updateSessionCategory}
           onEditPrescription={updateSessionPrescription}
           onApplyChanges={applyChanges}
         />
       )}
 
-      <div className="pb-4">
-        <Link href="/plan" className="text-[10px] tracking-[0.15em] uppercase text-stone-300 hover:text-stone-500 transition-colors">
-          Manage training block →
-        </Link>
-      </div>
+      {/* Review */}
+      {view === "review" && (
+        <ReviewView activeBlock={activeBlock} weeks={weeks} />
+      )}
+
+      {/* Coach — always mounted so conversation survives view switches, only on Today */}
+      {weeks.length > 0 && (
+        <div className={view === "today" ? "" : "hidden"}>
+          <CoachChat weeks={weeks} coachHistory={coachHistory} onApplyChanges={applyChanges} />
+        </div>
+      )}
+
+      {/* Today: TrainingWeeks + manage link */}
+      {view === "today" && weeks.length > 0 && activeBlock && (
+        <>
+          <TrainingWeeks
+            weeks={weeks}
+            blockId={activeBlock.id}
+            blockGoal={goal || activeBlock.primaryGoal}
+            expandedWeek={expandedWeek}
+            currentWeekId={currentWeek?.id ?? null}
+            todayDay={todayDay}
+            onToggleExpand={(id) => setExpandedWeek(expandedWeek === id ? null : id)}
+            onToggleSession={toggleSession}
+            onCategoryChange={updateSessionCategory}
+            onLogActual={logActual}
+            onEditPrescription={updateSessionPrescription}
+            onApplyChanges={applyChanges}
+          />
+          <div className="pb-2">
+            <button
+              onClick={() => setView("plan")}
+              className="text-[10px] tracking-[0.15em] uppercase text-stone-300 hover:text-stone-500 transition-colors"
+            >
+              Manage training block →
+            </button>
+          </div>
+        </>
+      )}
 
     </main>
   );

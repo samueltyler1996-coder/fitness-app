@@ -80,14 +80,16 @@ Home = dashboard (not a list). Editing = separate experience.
 - [x] adapt-plan rules updated for WOD + new prescription shapes
 - [x] TodayWorkout and SessionRow render all sections
 
-### Phase C — Planning / Editing Screen
+### Phase C — Planning / Editing Screen ✓
 _Goal: separate the "what am I doing today" dashboard from the "let me manage my plan" editor._
 
-- [ ] Dedicated planning view (separate route or panel)
-- [ ] Edit a session prescription manually
-- [ ] Regenerate a single week
-- [ ] Adjust block end date / goal
-- [ ] Mark sessions as manually modified (already flagged in data — needs UI)
+- [x] Dedicated planning view (`/plan` route with week grid, progress bar, block settings)
+- [x] Edit a session prescription manually (SessionEditModal with validation)
+- [x] Regenerate a single week (RegenerateWeekModal + `/api/regenerate-week`)
+- [x] Adjust block end date / goal (Block Settings on /plan page)
+- [x] Mark sessions as manually modified ("edited" badge + warn-before-overwrite in coach + regenerate)
+- [x] Plan page interaction: day square → session detail, W1 label → full week management
+- [x] SessionDetail: structured training-sheet layout with 2-line exercise rows
 
 ### Phase D — Deterministic Adaptation Rules
 _Goal: safe, predictable adaptation before relying purely on AI._
