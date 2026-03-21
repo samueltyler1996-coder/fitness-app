@@ -4,7 +4,7 @@ interface Props {
   session: Session | null;
 }
 
-const RUN_TYPE_LABEL: Record<string, string> = {
+const RUN_TYPE: Record<string, string> = {
   easy: "Easy Run",
   tempo: "Tempo Run",
   long: "Long Run",
@@ -12,81 +12,79 @@ const RUN_TYPE_LABEL: Record<string, string> = {
 };
 
 export default function TodayWorkout({ session }: Props) {
-  if (!session) {
+  const dayLabel = new Date().toLocaleDateString("en-GB", { weekday: "long" });
+
+  if (!session || !session.category) {
     return (
-      <div className="p-4 border rounded-lg bg-gray-50">
-        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Today</p>
-        <p className="text-sm text-gray-500">No session scheduled.</p>
+      <div className="py-6 border-l-4 border-stone-100 pl-5">
+        <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400 mb-3">{dayLabel}</p>
+        <p className="text-4xl font-black tracking-tight text-stone-200">Rest</p>
       </div>
     );
   }
 
-  const isRest = session.category === "Rest";
-  const isRun = session.category === "Run";
-  const isStrength = session.category === "Strength";
+  const { category, completed, prescription } = session;
+  const isRun = category === "Run";
+  const isStrength = category === "Strength";
+  const isRest = category === "Rest";
 
-  const categoryColor = isRun
-    ? "bg-blue-50 border-blue-200"
+  const borderColor = isRun ? "border-blue-500" : isStrength ? "border-amber-500" : "border-stone-200";
+
+  const headline = isRun
+    ? RUN_TYPE[prescription?.type ?? ""] ?? "Run"
     : isStrength
-    ? "bg-orange-50 border-orange-200"
-    : "bg-gray-50 border-gray-200";
-
-  const badgeColor = isRun
-    ? "bg-blue-100 text-blue-700"
-    : isStrength
-    ? "bg-orange-100 text-orange-700"
-    : "bg-gray-100 text-gray-500";
-
-  const runLabel = RUN_TYPE_LABEL[session.prescription?.type ?? ""] ?? session.prescription?.type ?? "";
+    ? `${prescription?.focus ? prescription.focus + " " : ""}Strength`
+    : "Rest";
 
   return (
-    <div className={`p-4 border rounded-lg ${categoryColor}`}>
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">Today · {session.day}</p>
+    <div className={`border-l-4 pl-5 ${borderColor}`}>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400">{dayLabel}</p>
+        {completed && (
+          <p className="text-[10px] tracking-[0.15em] uppercase text-emerald-500">✓ done</p>
+        )}
+      </div>
 
-      <div className="flex items-start justify-between">
-        <div className="flex flex-col gap-1">
-          {isRun && (
-            <>
-              <p className="text-xl font-bold">{runLabel}</p>
-              <div className="flex items-center gap-3 text-sm font-medium mt-1">
-                <span>{session.prescription?.distanceKm} km</span>
-                <span className="text-gray-300">·</span>
-                <span>{session.prescription?.targetPace}</span>
-              </div>
-              {session.prescription?.guidance && (
-                <p className="text-sm text-gray-500 mt-1">{session.prescription.guidance}</p>
-              )}
-            </>
+      <h1 className={`text-5xl font-black tracking-tight leading-none mb-1 ${completed ? "opacity-25" : ""}`}>
+        {headline}
+      </h1>
+
+      {isRun && (prescription?.distanceKm != null || prescription?.targetPace) && (
+        <div className={`flex items-end gap-8 mt-5 ${completed ? "opacity-25" : ""}`}>
+          {prescription?.distanceKm != null && (
+            <div>
+              <p className="text-[42px] font-black tabular-nums leading-none">{prescription.distanceKm}</p>
+              <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400 mt-1">km</p>
+            </div>
           )}
-
-          {isStrength && (
-            <>
-              <p className="text-xl font-bold capitalize">{session.prescription?.focus} Strength</p>
-              {session.prescription?.guidance && (
-                <p className="text-sm text-gray-500 mt-1">{session.prescription.guidance}</p>
-              )}
-            </>
-          )}
-
-          {isRest && (
-            <p className="text-xl font-bold">Rest Day</p>
-          )}
-
-          {!session.category && (
-            <p className="text-sm text-gray-400">No prescription set.</p>
+          {prescription?.targetPace && (
+            <div>
+              <p className="text-[42px] font-black tabular-nums leading-none">{prescription.targetPace}</p>
+              <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400 mt-1">/km</p>
+            </div>
           )}
         </div>
+      )}
 
-        <span className={`text-xs px-2 py-1 rounded-full shrink-0 ml-3 ${badgeColor}`}>
-          {session.category ?? "—"}
-        </span>
-      </div>
+      {isStrength && prescription?.guidance && !completed && (
+        <p className="text-sm text-stone-500 leading-relaxed mt-4 max-w-xs">{prescription.guidance}</p>
+      )}
 
-      <div className="mt-3">
-        <span className={`text-xs px-2 py-1 rounded-full ${session.completed ? "bg-green-100 text-green-700" : "bg-white text-gray-400 border"}`}>
-          {session.completed ? "Completed" : "Not done yet"}
-        </span>
-      </div>
+      {isRest && !completed && (
+        <p className="text-sm text-stone-400 leading-relaxed mt-4">
+          Adaptation happens at rest. Let your body recover today.
+        </p>
+      )}
+
+      {isRun && prescription?.guidance && !completed && (
+        <div className="mt-5 pt-4 border-t border-stone-100">
+          <p className="text-[11px] text-stone-400 leading-relaxed">{prescription.guidance}</p>
+        </div>
+      )}
+
+      {completed && (
+        <p className="text-sm text-emerald-600 font-medium mt-4">Session complete.</p>
+      )}
     </div>
   );
 }

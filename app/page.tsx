@@ -348,26 +348,18 @@ export default function Home() {
   }
 
   return (
-    <main className="max-w-md mx-auto px-4 py-8 flex flex-col gap-6">
+    <main className="max-w-md mx-auto px-5 py-8 flex flex-col gap-5">
 
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">{user.displayName}</h1>
-        <button onClick={() => signOut(auth)} className="text-sm text-gray-400 hover:text-gray-700">
+        <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400">{user.displayName}</p>
+        <button onClick={() => signOut(auth)} className="text-[10px] tracking-[0.15em] uppercase text-stone-400 hover:text-stone-700 transition-colors">
           Sign out
         </button>
       </div>
 
-      {(goal || eventDate) && (
-        <div className="flex items-center gap-3 text-sm text-gray-600">
-          {goal && <span className="font-medium">{goal}</span>}
-          {goal && eventDate && <span className="text-gray-300">·</span>}
-          {eventDate && <span>Race day: {eventDate}</span>}
-        </div>
-      )}
-
       <TodayWorkout session={todaySession} />
 
-      {activeBlock && <ActiveBlock block={activeBlock} weeks={weeks} />}
+      {activeBlock && <ActiveBlock block={activeBlock} weeks={weeks} goal={goal} eventDate={eventDate} />}
 
       {weeks.length > 0 && (
         <CoachChat weeks={weeks} coachHistory={coachHistory} onApplyChanges={applyChanges} />
@@ -387,31 +379,47 @@ export default function Home() {
         />
       )}
 
-      <div className="flex flex-col gap-3 border-t pt-6 mt-2">
-        <h2 className="font-semibold text-gray-600">Profile</h2>
-        <input
-          type="text"
-          placeholder="Current Goal (e.g. Marathon)"
-          value={goal}
-          onChange={(e) => setGoal(e.target.value)}
-          className="border p-2 rounded"
-        />
-        <input
-          type="date"
-          value={eventDate}
-          onChange={(e) => setEventDate(e.target.value)}
-          className="border p-2 rounded"
-        />
-        <button onClick={handleSave} className="bg-blue-600 text-white px-4 py-2 rounded">
-          Save Profile
-        </button>
-        <button
-          onClick={handleCreateBlock}
-          disabled={creating}
-          className="bg-purple-600 text-white px-4 py-2 rounded disabled:opacity-60"
-        >
-          {creating ? "Generating plan..." : "Create Training Block"}
-        </button>
+      <div className="pt-8 pb-4">
+        <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400 mb-5">Training Setup</p>
+
+        <div className="flex flex-col gap-5 mb-6">
+          <div>
+            <label className="text-[10px] tracking-[0.15em] uppercase text-stone-400 block mb-2">Goal</label>
+            <input
+              type="text"
+              placeholder="e.g. Marathon, 10K, General Fitness"
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              className="w-full border-0 border-b border-stone-200 pb-2 text-sm bg-transparent focus:outline-none focus:border-stone-800 transition-colors placeholder:text-stone-300"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] tracking-[0.15em] uppercase text-stone-400 block mb-2">Race Date</label>
+            <input
+              type="date"
+              value={eventDate}
+              onChange={(e) => setEventDate(e.target.value)}
+              className="w-full border-0 border-b border-stone-200 pb-2 text-sm bg-transparent focus:outline-none focus:border-stone-800 transition-colors text-stone-700"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={handleSave}
+            className="self-start text-[11px] tracking-[0.1em] uppercase text-stone-400 hover:text-stone-700 transition-colors"
+          >
+            Save profile
+          </button>
+          <button
+            onClick={handleCreateBlock}
+            disabled={creating}
+            className="w-full bg-stone-900 hover:bg-stone-800 text-white text-sm font-semibold py-4 rounded-xl disabled:opacity-40 transition-colors tracking-wide"
+          >
+            {creating ? "Generating plan…" : "Generate New Training Block"}
+          </button>
+          <p className="text-[10px] text-stone-300 text-center">Replaces your current active block</p>
+        </div>
       </div>
 
     </main>
