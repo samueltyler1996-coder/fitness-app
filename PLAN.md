@@ -64,25 +64,21 @@ Home = dashboard (not a list). Editing = separate experience.
 
 ## What's Next (Prioritised)
 
-### Phase A — Dashboard Polish
-_Goal: make the home screen feel like a coaching app, not a dev prototype._
+### Phase A — Dashboard Polish ✓
+- [x] Progress indicator on ActiveBlock (Week N of M, days to race, segmented bar)
+- [x] Goal + race date display on ActiveBlock
+- [x] Profile section redesigned (underline inputs, dark button)
+- [x] TodayWorkout dominates the screen with large typography
 
-- [ ] Progress indicator on ActiveBlock card (e.g. "Week 2 of 6", % complete, days to race)
-- [ ] Race name display (currently only shows event date — should show goal name too)
-- [ ] Profile section moved/redesigned — currently a raw form at the bottom, should feel less like settings
-- [ ] Visual hierarchy: Today's Workout should dominate the screen; rest should feel secondary
-
-### Phase B — Full Session Schema
-_Goal: sessions should carry real plan + real actual data, not just basic fields._
-
-Prescription fields to flesh out:
-- For runs: `type` (easy/tempo/long/intervals), `distanceKm`, `targetPace`, `targetTime`, `HRzone`, `intervals`, `recovery`, `guidance`
-- For strength: `focus`, `movements`, `sets`, `reps`, `intensity`, `guidance`
-- For rest: `guidance`
-
-Actual fields to flesh out:
-- `completed`, `actualDistanceKm`, `actualTime`, `actualPace`, `perceivedEffort`, `notes`
-- Later: pain/illness/fatigue markers to feed adaptation
+### Phase B — Full Session Schema ✓
+- [x] `RunPrescription`: type, distanceKm, targetPace, guidance, intervals array
+- [x] `StrengthPrescription`: focus, goal, durationMin, guidance, sections (warmup/main/accessory/finisher/cooldown) with real exercises (sets/reps/load/tempo)
+- [x] `WodPrescription`: format, focus, durationCapMin, guidance, sections with named stations (movement/distance/reps/load)
+- [x] `RestPrescription`: guidance, recoveryType
+- [x] `WOD` added as a Category
+- [x] generate-plan prompt outputs full prescription structures with real Hyrox movements
+- [x] adapt-plan rules updated for WOD + new prescription shapes
+- [x] TodayWorkout and SessionRow render all sections
 
 ### Phase C — Planning / Editing Screen
 _Goal: separate the "what am I doing today" dashboard from the "let me manage my plan" editor._

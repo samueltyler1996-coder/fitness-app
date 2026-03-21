@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
           day: s.day,
           category: s.category,
           prescription: s.prescription,
+          manuallyModified: s.manuallyModified ?? false,
         })),
     }))
     .filter((week: any) => week.sessions.length > 0);
@@ -78,14 +79,16 @@ ${JSON.stringify(weeksContext, null, 2)}
 
 Rules:
 - Only modify sessions that have not been completed (completed: false)
-- category must be exactly "Run", "Strength", or "Rest"
-- For Run sessions, type must be exactly one of: "easy", "tempo", "long", "intervals". Put extra detail in guidance
-- For Strength sessions include: focus (short, e.g. "lower", "upper", "core"), guidance
-- For Rest sessions prescription is {}
+- category must be exactly "Run", "Strength", "WOD", or "Rest"
+- For Run: include type ("easy"|"tempo"|"long"|"intervals"), distanceKm, targetPace, guidance. For intervals also include intervals array.
+- For Strength: include focus ("upper"|"lower"|"full"|"pull"|"push"|"core"), goal, durationMin, guidance, and sections with warmup/main/accessory arrays. Main exercises must have name, sets, reps, load.
+- For WOD: include format ("for_time"|"amrap"|"emom"|"intervals"|"stations"), focus ("hyrox_conditioning"|"hiit"|"threshold"|"mixed_engine"), durationCapMin, guidance, and sections.main with stations array. Each station has movement, distance or reps or calories, and optionally load.
+- For Rest: prescription is { "guidance": "...", "recoveryType": "full_rest" }
 - For illness: reduce or cancel sessions this week only
 - For injury: modify affected sessions across multiple weeks depending on severity
 - Be proportionate — a sore ankle doesn't cancel upper body strength
 - Keep the overall training intent where possible
+- Sessions marked manuallyModified:true were hand-edited by the user — avoid changing them unless the athlete explicitly asks, and mention it in your summary if you do
 
 IMPORTANT: Your entire response must be valid JSON and nothing else. Do not write any text before or after the JSON object. Start your response with { and end with }.
 

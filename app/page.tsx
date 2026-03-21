@@ -5,9 +5,10 @@ import {
   doc, setDoc, getDoc, collection, addDoc, serverTimestamp,
   query, where, getDocs, updateDoc, orderBy, writeBatch, limit
 } from "firebase/firestore";
+import Link from "next/link";
 import { signInWithPopup, signOut, GoogleAuthProvider, onAuthStateChanged, User } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
-import { TrainingBlock, TrainingWeek, Session, Category, Day, Actual, SessionChange, CoachSessionChange, CoachSessionLog } from "../lib/types";
+import { TrainingBlock, TrainingWeek, Session, Category, Day, Actual, Prescription, SessionChange, CoachSessionChange, CoachSessionLog } from "../lib/types";
 import TodayWorkout from "../components/TodayWorkout";
 import ActiveBlock from "../components/ActiveBlock";
 import TrainingWeeks from "../components/TrainingWeeks";
@@ -158,8 +159,9 @@ export default function Home() {
     }
 
     // Week 1: today → coming Sunday. Week 2+: Monday → Sunday.
+    // Use noon to avoid UTC offset flipping the date back one day (e.g. BST = UTC+1)
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setHours(12, 0, 0, 0);
     const daysUntilSunday = today.getDay() === 0 ? 0 : 7 - today.getDay();
     const week1End = new Date(today);
     week1End.setDate(today.getDate() + daysUntilSunday);
@@ -315,6 +317,17 @@ export default function Home() {
     ));
   };
 
+  const updateSessionPrescription = async (blockId: string, weekId: string, sessionId: string, newCategory: Category, newPrescription: Prescription) => {
+    if (!user) return;
+    const sessionRef = doc(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions", sessionId);
+    await updateDoc(sessionRef, { category: newCategory, prescription: newPrescription, manuallyModified: true });
+    setWeeks(prev => prev.map(week =>
+      week.id === weekId
+        ? { ...week, sessions: week.sessions.map(s => s.id === sessionId ? { ...s, category: newCategory, prescription: newPrescription, manuallyModified: true } : s) }
+        : week
+    ));
+  };
+
   const updateSessionCategory = async (blockId: string, weekId: string, sessionId: string, newCategory: Category) => {
     if (!user) return;
     const sessionRef = doc(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions", sessionId);
@@ -352,12 +365,22 @@ export default function Home() {
 
       <div className="flex justify-between items-center">
         <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400">{user.displayName}</p>
-        <button onClick={() => signOut(auth)} className="text-[10px] tracking-[0.15em] uppercase text-stone-400 hover:text-stone-700 transition-colors">
-          Sign out
-        </button>
+        <div className="flex items-center gap-4">
+          <span className="text-[10px] tracking-[0.15em] uppercase text-stone-900 font-semibold">Today</span>
+          <Link href="/plan" className="text-[10px] tracking-[0.15em] uppercase text-stone-400 hover:text-stone-700 transition-colors">Plan</Link>
+          <button onClick={() => signOut(auth)} className="text-[10px] tracking-[0.15em] uppercase text-stone-400 hover:text-stone-700 transition-colors">
+            Sign out
+          </button>
+        </div>
       </div>
 
-      <TodayWorkout session={todaySession} />
+      <TodayWorkout
+        session={todaySession}
+        blockId={activeBlock?.id ?? null}
+        weekId={currentWeek?.id ?? null}
+        onToggle={toggleSession}
+        onLogActual={logActual}
+      />
 
       {activeBlock && <ActiveBlock block={activeBlock} weeks={weeks} goal={goal} eventDate={eventDate} />}
 
@@ -369,6 +392,7 @@ export default function Home() {
         <TrainingWeeks
           weeks={weeks}
           blockId={activeBlock.id}
+          blockGoal={goal || activeBlock.primaryGoal}
           expandedWeek={expandedWeek}
           currentWeekId={currentWeek?.id ?? null}
           todayDay={todayDay}
@@ -376,50 +400,15 @@ export default function Home() {
           onToggleSession={toggleSession}
           onCategoryChange={updateSessionCategory}
           onLogActual={logActual}
+          onEditPrescription={updateSessionPrescription}
+          onApplyChanges={applyChanges}
         />
       )}
 
-      <div className="pt-8 pb-4">
-        <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400 mb-5">Training Setup</p>
-
-        <div className="flex flex-col gap-5 mb-6">
-          <div>
-            <label className="text-[10px] tracking-[0.15em] uppercase text-stone-400 block mb-2">Goal</label>
-            <input
-              type="text"
-              placeholder="e.g. Marathon, 10K, General Fitness"
-              value={goal}
-              onChange={(e) => setGoal(e.target.value)}
-              className="w-full border-0 border-b border-stone-200 pb-2 text-sm bg-transparent focus:outline-none focus:border-stone-800 transition-colors placeholder:text-stone-300"
-            />
-          </div>
-          <div>
-            <label className="text-[10px] tracking-[0.15em] uppercase text-stone-400 block mb-2">Race Date</label>
-            <input
-              type="date"
-              value={eventDate}
-              onChange={(e) => setEventDate(e.target.value)}
-              className="w-full border-0 border-b border-stone-200 pb-2 text-sm bg-transparent focus:outline-none focus:border-stone-800 transition-colors text-stone-700"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <button
-            onClick={handleSave}
-            className="self-start text-[11px] tracking-[0.1em] uppercase text-stone-400 hover:text-stone-700 transition-colors"
-          >
-            Save profile
-          </button>
-          <button
-            onClick={handleCreateBlock}
-            disabled={creating}
-            className="w-full bg-stone-900 hover:bg-stone-800 text-white text-sm font-semibold py-4 rounded-xl disabled:opacity-40 transition-colors tracking-wide"
-          >
-            {creating ? "Generating plan…" : "Generate New Training Block"}
-          </button>
-          <p className="text-[10px] text-stone-300 text-center">Replaces your current active block</p>
-        </div>
+      <div className="pb-4">
+        <Link href="/plan" className="text-[10px] tracking-[0.15em] uppercase text-stone-300 hover:text-stone-500 transition-colors">
+          Manage training block →
+        </Link>
       </div>
 
     </main>

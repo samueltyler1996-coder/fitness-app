@@ -13,17 +13,21 @@ type Message =
 
 function prescriptionLabel(category: Category, prescription: Prescription): string {
   if (!category || category === "Rest") return "Rest";
+  const p = prescription as any;
   const typeLabel: Record<string, string> = { easy: "Easy", tempo: "Tempo", long: "Long", intervals: "Intervals" };
   if (category === "Run") {
     const parts = [
-      typeLabel[prescription?.type ?? ""] ?? "Run",
-      prescription?.distanceKm ? `${prescription.distanceKm}km` : null,
-      prescription?.targetPace ?? null,
+      typeLabel[p?.type ?? ""] ?? "Run",
+      p?.distanceKm ? `${p.distanceKm}km` : null,
+      p?.targetPace ?? null,
     ].filter(Boolean);
     return parts.join(" · ");
   }
   if (category === "Strength") {
-    return prescription?.focus ? `${prescription.focus} strength` : "Strength";
+    return p?.focus ? `${p.focus} strength` : "Strength";
+  }
+  if (category === "WOD") {
+    return p?.sections?.main?.wodName ?? p?.format ?? "WOD";
   }
   return category;
 }
@@ -33,6 +37,8 @@ function categoryBadge(category: Category) {
     ? "bg-blue-100 text-blue-700"
     : category === "Strength"
     ? "bg-orange-100 text-orange-700"
+    : category === "WOD"
+    ? "bg-violet-100 text-violet-700"
     : "bg-gray-100 text-gray-500";
 }
 
@@ -203,23 +209,36 @@ export default function CoachChat({ weeks, coachHistory, onApplyChanges }: Props
       </div>
 
       {/* Apply / Cancel */}
-      {currentChanges.length > 0 && !loading && (
-        <div className="flex gap-2">
-          <button
-            onClick={handleApply}
-            disabled={applying}
-            className="text-sm px-4 py-2 bg-gray-900 text-white rounded-lg disabled:opacity-50"
-          >
-            {applying ? "Applying..." : "Apply changes"}
-          </button>
-          <button
-            onClick={handleCancel}
-            className="text-sm px-4 py-2 border rounded-lg text-gray-500"
-          >
-            Cancel
-          </button>
-        </div>
-      )}
+      {currentChanges.length > 0 && !loading && (() => {
+        const manuallyModifiedIds = new Set(
+          weeks.flatMap(w => w.sessions).filter(s => s.manuallyModified).map(s => s.id)
+        );
+        const overwriteCount = currentChanges.filter(c => manuallyModifiedIds.has(c.sessionId)).length;
+        return (
+          <div className="flex flex-col gap-2">
+            {overwriteCount > 0 && (
+              <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                ⚠ {overwriteCount} session{overwriteCount > 1 ? "s" : ""} in this change {overwriteCount > 1 ? "were" : "was"} manually edited. Applying will overwrite {overwriteCount > 1 ? "those" : "that"} edit.
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={handleApply}
+                disabled={applying}
+                className="text-sm px-4 py-2 bg-gray-900 text-white rounded-lg disabled:opacity-50"
+              >
+                {applying ? "Applying..." : overwriteCount > 0 ? "Apply anyway" : "Apply changes"}
+              </button>
+              <button
+                onClick={handleCancel}
+                className="text-sm px-4 py-2 border rounded-lg text-gray-500"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -1,9 +1,10 @@
-import { TrainingWeek, Category, Day, Actual } from "../lib/types";
+import { TrainingWeek, Category, Day, Actual, Prescription, SessionChange } from "../lib/types";
 import WeekCard from "./WeekCard";
 
 interface Props {
   weeks: TrainingWeek[];
   blockId: string;
+  blockGoal: string;
   expandedWeek: string | null;
   currentWeekId: string | null;
   todayDay: Day;
@@ -11,11 +12,13 @@ interface Props {
   onToggleSession: (blockId: string, weekId: string, sessionId: string, current: boolean) => void;
   onCategoryChange: (blockId: string, weekId: string, sessionId: string, category: Category) => void;
   onLogActual: (blockId: string, weekId: string, sessionId: string, actual: Actual) => void;
+  onEditPrescription: (blockId: string, weekId: string, sessionId: string, category: Category, prescription: Prescription) => Promise<void>;
+  onApplyChanges: (changes: SessionChange[], meta: { firstMessage: string; summary: string }) => Promise<void>;
 }
 
 export default function TrainingWeeks({
-  weeks, blockId, expandedWeek, currentWeekId, todayDay,
-  onToggleExpand, onToggleSession, onCategoryChange, onLogActual
+  weeks, blockId, blockGoal, expandedWeek, currentWeekId, todayDay,
+  onToggleExpand, onToggleSession, onCategoryChange, onLogActual, onEditPrescription, onApplyChanges
 }: Props) {
   return (
     <div>
@@ -26,6 +29,9 @@ export default function TrainingWeeks({
             key={week.id}
             week={week}
             index={index}
+            totalWeeks={weeks.length}
+            previousWeek={index > 0 ? weeks[index - 1] : null}
+            blockGoal={blockGoal}
             isExpanded={expandedWeek === week.id}
             isCurrentWeek={week.id === currentWeekId}
             todayDay={todayDay}
@@ -34,6 +40,8 @@ export default function TrainingWeeks({
             onToggleSession={onToggleSession}
             onCategoryChange={onCategoryChange}
             onLogActual={onLogActual}
+            onEditPrescription={onEditPrescription}
+            onApplyChanges={onApplyChanges}
           />
         ))}
       </div>
