@@ -3,17 +3,17 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   doc, setDoc, getDoc, collection, addDoc, serverTimestamp,
-  query, where, getDocs, updateDoc, orderBy
+  query, where, getDocs, updateDoc, orderBy, writeBatch, limit
 } from "firebase/firestore";
 import { signInWithPopup, signOut, GoogleAuthProvider, onAuthStateChanged, User } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
-import { TrainingBlock, TrainingWeek, Session, Category, Day, Actual, SessionChange } from "../lib/types";
+import { TrainingBlock, TrainingWeek, Session, Category, Day, Actual, SessionChange, CoachSessionChange, CoachSessionLog } from "../lib/types";
 import TodayWorkout from "../components/TodayWorkout";
 import ActiveBlock from "../components/ActiveBlock";
 import TrainingWeeks from "../components/TrainingWeeks";
 import CoachChat from "../components/CoachChat";
 
-const DAY_ORDER: Day[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -22,6 +22,7 @@ export default function Home() {
   const [activeBlock, setActiveBlock] = useState<TrainingBlock | null>(null);
   const [weeks, setWeeks] = useState<TrainingWeek[]>([]);
   const [expandedWeek, setExpandedWeek] = useState<string | null>(null);
+  const [coachHistory, setCoachHistory] = useState<CoachSessionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
@@ -64,9 +65,20 @@ export default function Home() {
       const sessionsRef = collection(db, "users", uid, "trainingBlocks", blockDoc.id, "trainingWeeks", weekDoc.id, "sessions");
       const sessionsSnapshot = await getDocs(sessionsRef);
 
+      const weekStartDate = (weekDoc.data() as TrainingWeek).startDate;
+      const getOffset = (day: string) => {
+        const start = new Date(weekStartDate + "T12:00:00");
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(start);
+          d.setDate(start.getDate() + i);
+          if (DAY_NAMES[d.getDay()] === day) return i;
+        }
+        return 0;
+      };
+
       const sessions: Session[] = sessionsSnapshot.docs
         .map(s => ({ id: s.id, ...s.data() } as Session))
-        .sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day));
+        .sort((a, b) => getOffset(a.day) - getOffset(b.day));
 
       const week: TrainingWeek = { id: weekDoc.id, ...weekDoc.data(), sessions } as TrainingWeek;
       weeksData.push(week);
@@ -78,6 +90,14 @@ export default function Home() {
 
     setWeeks(weeksData);
     if (currentWeekId) setExpandedWeek(currentWeekId);
+
+    const historyQuery = query(
+      collection(db, "users", uid, "coachSessions"),
+      orderBy("appliedAt", "desc"),
+      limit(10)
+    );
+    const historySnap = await getDocs(historyQuery);
+    setCoachHistory(historySnap.docs.map(d => ({ id: d.id, ...d.data() } as CoachSessionLog)));
   }, []);
 
   useEffect(() => {
@@ -137,9 +157,25 @@ export default function Home() {
       await updateDoc(docSnap.ref, { status: "completed", endedAt: serverTimestamp() });
     }
 
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setDate(startDate.getDate() + 42);
+    // Week 1: today → coming Sunday. Week 2+: Monday → Sunday.
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const daysUntilSunday = today.getDay() === 0 ? 0 : 7 - today.getDay();
+    const week1End = new Date(today);
+    week1End.setDate(today.getDate() + daysUntilSunday);
+
+    const weekRanges: { start: Date; end: Date }[] = [{ start: new Date(today), end: new Date(week1End) }];
+    let nextMonday = new Date(week1End);
+    nextMonday.setDate(week1End.getDate() + 1);
+    for (let i = 1; i < 6; i++) {
+      const weekStart = new Date(nextMonday);
+      const weekEnd = new Date(nextMonday);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      weekRanges.push({ start: weekStart, end: weekEnd });
+      nextMonday.setDate(nextMonday.getDate() + 7);
+    }
+
+    const blockEndDate = weekRanges[weekRanges.length - 1].end;
     const primaryGoal = goal || "Maintenance";
     const name = primaryGoal === "Maintenance" ? "Maintenance Block" : `${primaryGoal} Block`;
 
@@ -147,33 +183,32 @@ export default function Home() {
       name,
       primaryGoal,
       secondaryGoal: null,
-      startDate: startDate.toISOString().split("T")[0],
-      endDate: endDate.toISOString().split("T")[0],
+      startDate: today.toISOString().split("T")[0],
+      endDate: blockEndDate.toISOString().split("T")[0],
       status: "active",
       createdAt: serverTimestamp(),
     });
 
     const blockId = blockDocRef.id;
-    let currentStart = new Date(startDate);
 
-    for (let weekIndex = 0; weekIndex < 6; weekIndex++) {
-      const currentEnd = new Date(currentStart);
-      currentEnd.setDate(currentStart.getDate() + 6);
-      if (currentEnd > endDate) currentEnd.setTime(endDate.getTime());
+    for (let weekIndex = 0; weekIndex < weekRanges.length; weekIndex++) {
+      const { start, end } = weekRanges[weekIndex];
 
       const weekRef = await addDoc(
         collection(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks"),
         {
-          startDate: currentStart.toISOString().split("T")[0],
-          endDate: currentEnd.toISOString().split("T")[0],
+          startDate: start.toISOString().split("T")[0],
+          endDate: end.toISOString().split("T")[0],
           createdAt: serverTimestamp(),
         }
       );
 
       const weekId = weekRef.id;
       const weekPlan = generatedPlan.weeks?.[weekIndex];
+      const current = new Date(start);
 
-      for (const day of DAY_ORDER) {
+      while (current <= end) {
+        const day = DAY_NAMES[current.getDay()] as Day;
         const sessionPlan = weekPlan?.sessions?.find((s: any) => s.day === day);
         await addDoc(
           collection(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions"),
@@ -188,9 +223,8 @@ export default function Home() {
             createdAt: serverTimestamp(),
           }
         );
+        current.setDate(current.getDate() + 1);
       }
-
-      currentStart.setDate(currentStart.getDate() + 7);
     }
 
     await fetchBlockData(user.uid);
@@ -214,12 +248,49 @@ export default function Home() {
     ));
   };
 
-  const applyChanges = async (changes: SessionChange[]) => {
+  const applyChanges = async (changes: SessionChange[], meta: { firstMessage: string; summary: string }) => {
     if (!user || !activeBlock) return;
+
+    const batch = writeBatch(db);
+
+    const logChanges: CoachSessionChange[] = changes.map(change => {
+      const original = weeks.flatMap(w => w.sessions).find(s => s.id === change.sessionId);
+      return {
+        weekId: change.weekId,
+        sessionId: change.sessionId,
+        day: change.day,
+        fromCategory: original?.category ?? null,
+        fromPrescription: original?.prescription ?? {},
+        toCategory: change.category,
+        toPrescription: change.prescription,
+      };
+    });
+
     for (const change of changes) {
       const sessionRef = doc(db, "users", user.uid, "trainingBlocks", activeBlock.id, "trainingWeeks", change.weekId, "sessions", change.sessionId);
-      await updateDoc(sessionRef, { category: change.category, prescription: change.prescription, manuallyModified: true });
+      batch.update(sessionRef, { category: change.category, prescription: change.prescription, manuallyModified: true });
     }
+
+    const coachSessionRef = doc(collection(db, "users", user.uid, "coachSessions"));
+    batch.set(coachSessionRef, {
+      appliedAt: serverTimestamp(),
+      firstMessage: meta.firstMessage,
+      summary: meta.summary,
+      changesCount: changes.length,
+      changes: logChanges,
+    });
+
+    await batch.commit();
+
+    setCoachHistory(prev => [{
+      id: coachSessionRef.id,
+      appliedAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 },
+      firstMessage: meta.firstMessage,
+      summary: meta.summary,
+      changesCount: changes.length,
+      changes: logChanges,
+    }, ...prev].slice(0, 10));
+
     setWeeks(prev => prev.map(week => {
       const weekChanges = changes.filter(c => c.weekId === week.id);
       if (weekChanges.length === 0) return week;
@@ -299,7 +370,7 @@ export default function Home() {
       {activeBlock && <ActiveBlock block={activeBlock} weeks={weeks} />}
 
       {weeks.length > 0 && (
-        <CoachChat weeks={weeks} onApplyChanges={applyChanges} />
+        <CoachChat weeks={weeks} coachHistory={coachHistory} onApplyChanges={applyChanges} />
       )}
 
       {weeks.length > 0 && activeBlock && (

@@ -4,20 +4,36 @@ import { NextRequest, NextResponse } from "next/server";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export async function POST(req: NextRequest) {
-  const { messages, currentChanges, weeks } = await req.json();
+  const { messages, currentChanges, weeks, coachHistory } = await req.json();
 
-  const weeksContext = weeks.map((week: any) => ({
-    weekId: week.id,
-    startDate: week.startDate,
-    endDate: week.endDate,
-    sessions: week.sessions.map((s: any) => ({
-      sessionId: s.id,
-      day: s.day,
-      category: s.category,
-      completed: s.completed,
-      prescription: s.prescription,
-    })),
-  }));
+  const today = new Date(new Date().toISOString().split("T")[0]);
+  const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+  function getSessionDate(weekStartDate: string, day: string): Date {
+    const start = new Date(weekStartDate);
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      if (DAY_NAMES[d.getDay()] === day) return d;
+    }
+    return start;
+  }
+
+  const weeksContext = weeks
+    .map((week: any) => ({
+      weekId: week.id,
+      startDate: week.startDate,
+      endDate: week.endDate,
+      sessions: week.sessions
+        .filter((s: any) => !s.completed && getSessionDate(week.startDate, s.day) >= today)
+        .map((s: any) => ({
+          sessionId: s.id,
+          day: s.day,
+          category: s.category,
+          prescription: s.prescription,
+        })),
+    }))
+    .filter((week: any) => week.sessions.length > 0);
 
   const conversationHistory = messages
     .map((m: any) => {
@@ -25,7 +41,13 @@ export async function POST(req: NextRequest) {
       if (m.role === "coach") {
         let text = `Coach: ${m.content}`;
         if (m.changes?.length > 0) {
-          text += `\n(Proposed changes: ${m.changes.map((c: any) => `${c.day} → ${c.category}`).join(", ")})`;
+          const changeLines = m.changes.map((c: any) => {
+            const rx = c.prescription && Object.keys(c.prescription).length > 0
+              ? ` — ${JSON.stringify(c.prescription)}`
+              : "";
+            return `  - ${c.day}: ${c.category}${rx}`;
+          }).join("\n");
+          text += `\nProposed changes:\n${changeLines}`;
         }
         return text;
       }
@@ -33,9 +55,16 @@ export async function POST(req: NextRequest) {
     })
     .join("\n\n");
 
+  const historyContext = coachHistory?.length > 0
+    ? `Coaching history (use for trend awareness — patterns of injury, illness, or fatigue are important signals):\n${coachHistory.map((s: any) => {
+        const date = new Date(s.appliedAt.seconds * 1000).toISOString().split("T")[0];
+        return `- ${date}: "${s.firstMessage}" → ${s.changesCount} session(s) changed`;
+      }).join("\n")}\n\n`
+    : "";
+
   const prompt = `You are an adaptive running and fitness coach having a conversation with an athlete about adjusting their training plan.
 
-Here is the conversation so far:
+${historyContext}Here is the conversation so far:
 
 ${conversationHistory}
 

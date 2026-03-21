@@ -43,6 +43,25 @@ export interface SessionChange {
   prescription: Prescription;
 }
 
+export interface CoachSessionChange {
+  weekId: string;
+  sessionId: string;
+  day: string;
+  fromCategory: Category;
+  fromPrescription: Prescription;
+  toCategory: Category;
+  toPrescription: Prescription;
+}
+
+export interface CoachSessionLog {
+  id: string;
+  appliedAt: { seconds: number; nanoseconds: number };
+  firstMessage: string;
+  summary: string;
+  changesCount: number;
+  changes: CoachSessionChange[];
+}
+
 export interface AdaptResponse {
   summary: string;
   changes: SessionChange[];

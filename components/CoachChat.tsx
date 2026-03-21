@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { TrainingWeek, AdaptResponse, SessionChange, Category, Prescription } from "../lib/types";
+import { TrainingWeek, AdaptResponse, SessionChange, Category, Prescription, CoachSessionLog } from "../lib/types";
 
 interface Props {
   weeks: TrainingWeek[];
-  onApplyChanges: (changes: SessionChange[]) => Promise<void>;
+  coachHistory: CoachSessionLog[];
+  onApplyChanges: (changes: SessionChange[], meta: { firstMessage: string; summary: string }) => Promise<void>;
 }
 
 type Message =
@@ -35,7 +36,7 @@ function categoryBadge(category: Category) {
     : "bg-gray-100 text-gray-500";
 }
 
-export default function CoachChat({ weeks, onApplyChanges }: Props) {
+export default function CoachChat({ weeks, coachHistory, onApplyChanges }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [currentChanges, setCurrentChanges] = useState<SessionChange[]>([]);
@@ -63,6 +64,7 @@ export default function CoachChat({ weeks, onApplyChanges }: Props) {
           messages: updatedMessages,
           currentChanges,
           weeks: relevantWeeks,
+          coachHistory,
         }),
       });
       if (!res.ok) throw new Error("API error");
@@ -82,7 +84,10 @@ export default function CoachChat({ weeks, onApplyChanges }: Props) {
   const handleApply = async () => {
     if (currentChanges.length === 0) return;
     setApplying(true);
-    await onApplyChanges(currentChanges);
+    const firstMessage = messages.find(m => m.role === "user")?.content ?? "";
+    const lastCoach = [...messages].reverse().find(m => m.role === "coach") as (Message & { role: "coach" }) | undefined;
+    const summary = lastCoach?.content ?? "";
+    await onApplyChanges(currentChanges, { firstMessage, summary });
     setApplying(false);
     setMessages([]);
     setCurrentChanges([]);
