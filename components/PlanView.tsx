@@ -93,6 +93,16 @@ function computeCrossBlockInsights(blocks: TrainingBlock[]): InsightSignal[] {
   return signals;
 }
 
+const DAY_OFFSET: Record<Day, number> = {
+  Monday: 0, Tuesday: 1, Wednesday: 2, Thursday: 3, Friday: 4, Saturday: 5, Sunday: 6
+};
+
+function getSessionDate(weekStartDate: string, day: Day): string {
+  const d = new Date(weekStartDate + "T12:00:00");
+  d.setDate(d.getDate() + DAY_OFFSET[day]);
+  return d.toISOString().split("T")[0];
+}
+
 const DURATION_OPTIONS = [4, 6, 8, 10, 12];
 
 function QueueBlockForm({ onQueue, suggestedGoal }: { onQueue: (goal: string, numWeeks: number) => Promise<void>; suggestedGoal: string }) {
@@ -438,6 +448,8 @@ export default function PlanView({
                     blockId={activeBlock.id}
                     weekId={week.id}
                     isToday={isCurrentWeek && selectedSession.day === todayDay}
+                    uid={uid}
+                    sessionDate={getSessionDate(week.startDate, selectedSession.day)}
                     onToggle={onToggleSession}
                     onLogActual={onLogActual}
                     onEditPrescription={onEditPrescription}

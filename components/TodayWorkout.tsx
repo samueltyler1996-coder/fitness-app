@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Session, Actual, StrengthPrescription, WodPrescription, RunPrescription } from "../lib/types";
+import { StravaActivity, computePaceStr, inferEffort } from "../lib/strava";
 
 interface Props {
   session: Session | null;
   blockId: string | null;
   weekId: string | null;
+  uid?: string;
   onToggle?: (blockId: string, weekId: string, sessionId: string, current: boolean) => void;
   onLogActual?: (blockId: string, weekId: string, sessionId: string, actual: Actual) => void;
 }
@@ -24,13 +26,43 @@ const WOD_FORMAT: Record<string, string> = {
   stations: "Stations",
 };
 
-export default function TodayWorkout({ session, blockId, weekId, onToggle, onLogActual }: Props) {
+export default function TodayWorkout({ session, blockId, weekId, uid, onToggle, onLogActual }: Props) {
   const [logText, setLogText] = useState("");
   const [parsed, setParsed] = useState<{ summary: string; actual: Actual } | null>(null);
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [stravaActivity, setStravaActivity] = useState<StravaActivity | null>(null);
 
   const dayLabel = new Date().toLocaleDateString("en-GB", { weekday: "long" });
+  const todayISO = new Date().toISOString().split("T")[0];
+
+  const isRun = session?.category === "Run";
+
+  useEffect(() => {
+    if (!isRun || !uid || session?.completed) return;
+    setStravaActivity(null);
+    fetch("/api/strava/activities", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid, after: todayISO, before: todayISO }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.activities?.length) setStravaActivity(data.activities[0]); })
+      .catch(() => {});
+  }, [isRun, uid, todayISO, session?.id, session?.completed]);
+
+  const handleStravaImport = () => {
+    if (!stravaActivity) return;
+    const distanceKm = Math.round(stravaActivity.distance / 100) / 10;
+    const pace = computePaceStr(stravaActivity.moving_time, stravaActivity.distance);
+    const effort = inferEffort(stravaActivity.perceived_exertion, stravaActivity.average_heartrate);
+    const raw = `${distanceKm} km at ${pace} — from Strava`;
+    setLogText(raw);
+    setParsed({
+      summary: `${distanceKm} km · ${pace}${effort ? ` · ${effort} effort` : ""} — "${stravaActivity.name}" (Strava)`,
+      actual: { distanceKm, pace, effort: effort ?? null },
+    });
+  };
 
   if (!session || !session.category) {
     return (
@@ -42,7 +74,6 @@ export default function TodayWorkout({ session, blockId, weekId, onToggle, onLog
   }
 
   const { category, completed, prescription } = session;
-  const isRun = category === "Run";
   const isStrength = category === "Strength";
   const isWod = category === "WOD";
   const isRest = category === "Rest";
@@ -311,6 +342,25 @@ export default function TodayWorkout({ session, blockId, weekId, onToggle, onLog
           {!completed && !parsed && (
             <div className="bg-stone-50 rounded-2xl px-4 py-4 flex flex-col gap-3">
               <p className="text-[10px] tracking-[0.15em] uppercase text-stone-400">How did it go?</p>
+              {isRun && stravaActivity && (
+                <div className="flex items-center justify-between bg-orange-50 border border-orange-100 rounded-xl px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-orange-500 shrink-0" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" />
+                    </svg>
+                    <span className="text-[12px] text-orange-700 font-medium">
+                      {(stravaActivity.distance / 1000).toFixed(1)} km · {computePaceStr(stravaActivity.moving_time, stravaActivity.distance)}
+                    </span>
+                    <span className="text-[10px] text-orange-400 truncate max-w-[100px]">{stravaActivity.name}</span>
+                  </div>
+                  <button
+                    onClick={handleStravaImport}
+                    className="text-[11px] tracking-[0.05em] uppercase text-orange-600 hover:text-orange-900 font-semibold transition-colors shrink-0"
+                  >
+                    Import →
+                  </button>
+                </div>
+              )}
               <div className="flex gap-2 items-center">
                 <input
                   type="text"

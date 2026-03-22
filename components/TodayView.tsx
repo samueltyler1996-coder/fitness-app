@@ -12,12 +12,13 @@ interface Props {
   todayDay: Day;
   goal: string;
   eventDate: string;
+  uid?: string;
   onToggleSession: (blockId: string, weekId: string, sessionId: string, current: boolean) => void;
   onLogActual: (blockId: string, weekId: string, sessionId: string, actual: Actual) => void;
 }
 
 export default function TodayView({
-  activeBlock, weeks, currentWeek, todaySession, todayDay, goal, eventDate,
+  activeBlock, weeks, currentWeek, todaySession, todayDay, goal, eventDate, uid,
   onToggleSession, onLogActual,
 }: Props) {
   const insights = computeInsights(weeks, 4);
@@ -29,6 +30,7 @@ export default function TodayView({
         session={todaySession}
         blockId={activeBlock?.id ?? null}
         weekId={currentWeek?.id ?? null}
+        uid={uid}
         onToggle={onToggleSession}
         onLogActual={onLogActual}
       />

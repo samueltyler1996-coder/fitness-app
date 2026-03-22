@@ -575,6 +575,7 @@ export default function Home() {
           todayDay={todayDay}
           goal={goal}
           eventDate={eventDate}
+          uid={user.uid}
           onToggleSession={toggleSession}
           onLogActual={logActual}
         />
