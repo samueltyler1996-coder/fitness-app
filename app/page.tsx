@@ -3,14 +3,16 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   doc, setDoc, getDoc, collection, addDoc, serverTimestamp,
-  query, where, getDocs, updateDoc, orderBy, writeBatch, limit
+  query, where, getDocs, updateDoc, orderBy, writeBatch, limit, deleteDoc
 } from "firebase/firestore";
 import { signInWithPopup, signOut, GoogleAuthProvider, onAuthStateChanged, User } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
-import { TrainingBlock, TrainingWeek, Session, Category, Day, Actual, Prescription, SessionChange, CoachSessionChange, CoachSessionLog } from "../lib/types";
+import { TrainingBlock, TrainingWeek, Session, Category, Day, Actual, Prescription, SessionChange, CoachSessionChange, CoachSessionLog, IncidentType } from "../lib/types";
+import { computeBlockSummary } from "../lib/analytics";
 import TodayView from "../components/TodayView";
 import PlanView from "../components/PlanView";
 import ReviewView from "../components/ReviewView";
+import ProgressView from "../components/ProgressView";
 import CoachChat from "../components/CoachChat";
 import TrainingWeeks from "../components/TrainingWeeks";
 
@@ -21,12 +23,14 @@ export default function Home() {
   const [goal, setGoal] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [activeBlock, setActiveBlock] = useState<TrainingBlock | null>(null);
+  const [queuedBlock, setQueuedBlock] = useState<TrainingBlock | null>(null);
+  const [completedBlocks, setCompletedBlocks] = useState<TrainingBlock[]>([]);
   const [weeks, setWeeks] = useState<TrainingWeek[]>([]);
   const [expandedWeek, setExpandedWeek] = useState<string | null>(null);
   const [coachHistory, setCoachHistory] = useState<CoachSessionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [view, setView] = useState<"today" | "plan" | "review">("today");
+  const [view, setView] = useState<"today" | "plan" | "review" | "progress">("today");
 
   const todayISO = new Date().toISOString().split("T")[0];
   const todayDate = new Date(todayISO);
@@ -42,20 +46,27 @@ export default function Home() {
 
   const fetchBlockData = useCallback(async (uid: string) => {
     const blocksRef = collection(db, "users", uid, "trainingBlocks");
-    const activeQuery = query(blocksRef, where("status", "==", "active"));
-    const activeSnapshot = await getDocs(activeQuery);
+    const allBlocksSnapshot = await getDocs(query(blocksRef, orderBy("startDate", "asc")));
+    const allBlocks = allBlocksSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as TrainingBlock));
 
-    if (activeSnapshot.empty) {
+    const active = allBlocks.find(b => b.status === "active") ?? null;
+    const queued = allBlocks.find(b => b.status === "queued") ?? null;
+    // Most-recent completed block first
+    const completed = allBlocks.filter(b => b.status === "completed").reverse();
+
+    setQueuedBlock(queued);
+    setCompletedBlocks(completed);
+
+    if (!active) {
       setActiveBlock(null);
       setWeeks([]);
       setExpandedWeek(null);
       return;
     }
 
-    const blockDoc = activeSnapshot.docs[0];
-    setActiveBlock({ id: blockDoc.id, ...blockDoc.data() } as TrainingBlock);
+    setActiveBlock(active);
 
-    const weeksRef = collection(db, "users", uid, "trainingBlocks", blockDoc.id, "trainingWeeks");
+    const weeksRef = collection(db, "users", uid, "trainingBlocks", active.id, "trainingWeeks");
     const weeksQuery = query(weeksRef, orderBy("startDate", "asc"));
     const weeksSnapshot = await getDocs(weeksQuery);
 
@@ -64,7 +75,7 @@ export default function Home() {
     const today = new Date(new Date().toISOString().split("T")[0]);
 
     for (const weekDoc of weeksSnapshot.docs) {
-      const sessionsRef = collection(db, "users", uid, "trainingBlocks", blockDoc.id, "trainingWeeks", weekDoc.id, "sessions");
+      const sessionsRef = collection(db, "users", uid, "trainingBlocks", active.id, "trainingWeeks", weekDoc.id, "sessions");
       const sessionsSnapshot = await getDocs(sessionsRef);
 
       const weekStartDate = (weekDoc.data() as TrainingWeek).startDate;
@@ -156,7 +167,10 @@ export default function Home() {
     const activeQuery = query(blocksRef, where("status", "==", "active"));
     const activeSnapshot = await getDocs(activeQuery);
     for (const docSnap of activeSnapshot.docs) {
-      await updateDoc(docSnap.ref, { status: "completed", endedAt: serverTimestamp() });
+      // Compute snapshot summary from current weeks state before marking completed
+      const completedAt = new Date().toISOString().split("T")[0];
+      const summary = computeBlockSummary(weeks, completedAt);
+      await updateDoc(docSnap.ref, { status: "completed", endedAt: serverTimestamp(), summary });
     }
 
     const today = new Date();
@@ -238,6 +252,123 @@ export default function Home() {
     await setDoc(userRef, { currentGoal: goal, eventDate }, { merge: true });
   };
 
+  const handleQueueBlock = async (nextGoal: string, numWeeks: number) => {
+    if (!user || !activeBlock || queuedBlock) return;
+
+    // Start the day after the active block ends
+    const activeEnd = new Date(activeBlock.endDate + "T12:00:00");
+    const start = new Date(activeEnd);
+    start.setDate(start.getDate() + 1);
+    const end = new Date(start);
+    end.setDate(end.getDate() + (numWeeks * 7) - 1);
+
+    const blocksRef = collection(db, "users", user.uid, "trainingBlocks");
+    await addDoc(blocksRef, {
+      name: `${nextGoal} Block`,
+      primaryGoal: nextGoal,
+      startDate: start.toISOString().split("T")[0],
+      endDate: end.toISOString().split("T")[0],
+      status: "queued",
+      createdAt: serverTimestamp(),
+    });
+
+    await fetchBlockData(user.uid);
+  };
+
+  const handleRemoveQueuedBlock = async () => {
+    if (!user || !queuedBlock) return;
+    await deleteDoc(doc(db, "users", user.uid, "trainingBlocks", queuedBlock.id));
+    await fetchBlockData(user.uid);
+  };
+
+  const handleActivateQueuedBlock = async () => {
+    if (!user || !queuedBlock) return;
+    setCreating(true);
+
+    // Generate sessions using the queued block's goal
+    let generatedPlan: any = null;
+    try {
+      // Derive week count from queued block's date range for the API call
+      const qBlockStart = new Date(queuedBlock.startDate + "T12:00:00");
+      const qBlockEnd = new Date(queuedBlock.endDate + "T12:00:00");
+      const qBlockWeeks = Math.round((qBlockEnd.getTime() - qBlockStart.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+
+      const res = await fetch("/api/generate-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goal: queuedBlock.primaryGoal, eventDate, weeks: qBlockWeeks }),
+      });
+      if (!res.ok) throw new Error("API error");
+      generatedPlan = await res.json();
+    } catch {
+      setCreating(false);
+      return;
+    }
+
+    // Complete the current active block with a summary snapshot
+    const blocksRef = collection(db, "users", user.uid, "trainingBlocks");
+    const activeSnapshot = await getDocs(query(blocksRef, where("status", "==", "active")));
+    for (const docSnap of activeSnapshot.docs) {
+      const completedAt = new Date().toISOString().split("T")[0];
+      const summary = computeBlockSummary(weeks, completedAt);
+      await updateDoc(docSnap.ref, { status: "completed", endedAt: serverTimestamp(), summary });
+    }
+
+    // Promote queued → active
+    const queuedRef = doc(db, "users", user.uid, "trainingBlocks", queuedBlock.id);
+    await updateDoc(queuedRef, { status: "active" });
+
+    // Derive week count from queued block's stored date range
+    const blockId = queuedBlock.id;
+    const qStart = new Date(queuedBlock.startDate + "T12:00:00");
+    const qEnd = new Date(queuedBlock.endDate + "T12:00:00");
+    const numWeeks = Math.round((qEnd.getTime() - qStart.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+    const current = new Date(qStart);
+
+    for (let weekIndex = 0; weekIndex < numWeeks; weekIndex++) {
+      const weekStart = new Date(current);
+      const weekEnd = new Date(current);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+
+      const weekRef = await addDoc(
+        collection(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks"),
+        {
+          startDate: weekStart.toISOString().split("T")[0],
+          endDate: weekEnd.toISOString().split("T")[0],
+          createdAt: serverTimestamp(),
+        }
+      );
+
+      const weekId = weekRef.id;
+      const weekPlan = generatedPlan.weeks?.[weekIndex];
+      const day = new Date(weekStart);
+
+      while (day <= weekEnd) {
+        const dayName = DAY_NAMES[day.getDay()] as Day;
+        const sessionPlan = weekPlan?.sessions?.find((s: any) => s.day === dayName);
+        await addDoc(
+          collection(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions"),
+          {
+            day: dayName,
+            category: sessionPlan?.category ?? null,
+            completed: false,
+            prescription: sessionPlan?.prescription ?? {},
+            actual: {},
+            aiGenerated: true,
+            manuallyModified: false,
+            createdAt: serverTimestamp(),
+          }
+        );
+        day.setDate(day.getDate() + 1);
+      }
+
+      current.setDate(current.getDate() + 7);
+    }
+
+    await fetchBlockData(user.uid);
+    setCreating(false);
+  };
+
   const toggleSession = async (blockId: string, weekId: string, sessionId: string, currentValue: boolean) => {
     if (!user) return;
     const sessionRef = doc(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions", sessionId);
@@ -249,7 +380,7 @@ export default function Home() {
     ));
   };
 
-  const applyChanges = async (changes: SessionChange[], meta: { firstMessage: string; summary: string }) => {
+  const applyChanges = async (changes: SessionChange[], meta: { firstMessage: string; summary: string; incidentType?: IncidentType }) => {
     if (!user || !activeBlock) return;
 
     const batch = writeBatch(db);
@@ -279,6 +410,7 @@ export default function Home() {
       summary: meta.summary,
       changesCount: changes.length,
       changes: logChanges,
+      ...(meta.incidentType && { incidentType: meta.incidentType }),
     });
 
     await batch.commit();
@@ -290,6 +422,7 @@ export default function Home() {
       summary: meta.summary,
       changesCount: changes.length,
       changes: logChanges,
+      ...(meta.incidentType && { incidentType: meta.incidentType }),
     }, ...prev].slice(0, 10));
 
     setWeeks(prev => prev.map(week => {
@@ -383,6 +516,12 @@ export default function Home() {
           >
             Review
           </button>
+          <button
+            onClick={() => setView("progress")}
+            className={`text-[10px] tracking-[0.15em] uppercase transition-colors ${view === "progress" ? "text-stone-900 font-semibold" : "text-stone-400 hover:text-stone-700"}`}
+          >
+            Progress
+          </button>
           <button onClick={() => signOut(auth)} className="text-[10px] tracking-[0.15em] uppercase text-stone-400 hover:text-stone-700 transition-colors">
             Sign out
           </button>
@@ -408,6 +547,8 @@ export default function Home() {
       {view === "plan" && (
         <PlanView
           activeBlock={activeBlock}
+          queuedBlock={queuedBlock}
+          completedBlocks={completedBlocks}
           weeks={weeks}
           currentWeek={currentWeek}
           todayDay={todayDay}
@@ -423,12 +564,20 @@ export default function Home() {
           onCategoryChange={updateSessionCategory}
           onEditPrescription={updateSessionPrescription}
           onApplyChanges={applyChanges}
+          onQueueBlock={handleQueueBlock}
+          onRemoveQueuedBlock={handleRemoveQueuedBlock}
+          onActivateQueuedBlock={handleActivateQueuedBlock}
         />
       )}
 
       {/* Review */}
       {view === "review" && (
         <ReviewView activeBlock={activeBlock} weeks={weeks} />
+      )}
+
+      {/* Progress */}
+      {view === "progress" && (
+        <ProgressView completedBlocks={completedBlocks} coachHistory={coachHistory} />
       )}
 
       {/* Coach — always mounted so conversation survives view switches, only on Today */}

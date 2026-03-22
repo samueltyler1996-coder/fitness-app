@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { TrainingBlock, TrainingWeek, Session, Category, Day, Actual, Prescription, SessionChange } from "../lib/types";
-import { computeInsights } from "../lib/analytics";
+import { computeInsights, InsightSignal } from "../lib/analytics";
 import SessionRow from "./SessionRow";
 import SessionDetail from "./SessionDetail";
 import RegenerateWeekModal from "./RegenerateWeekModal";
@@ -35,8 +35,194 @@ function sessionDotColor(session: Session | undefined): string {
     : (pending[session.category] ?? "bg-stone-100");
 }
 
+function formatDateShort(dateStr: string): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T12:00:00");
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// Aggregate per-block summaries into cross-block trend signals
+function computeCrossBlockInsights(blocks: TrainingBlock[]): InsightSignal[] {
+  const withSummary = blocks.filter(b => b.summary).slice(0, 4); // last 4 completed blocks
+  if (withSummary.length < 2) return [];
+
+  const signals: InsightSignal[] = [];
+
+  // Overall completion trend (blocks are most-recent first)
+  const rates = withSummary.map(b => b.summary!.completionRate);
+  const recent = rates[0];
+  const older = rates[rates.length - 1];
+  const avgRate = rates.reduce((s, r) => s + r, 0) / rates.length;
+
+  if (recent > older + 0.1) {
+    signals.push({ type: "positive", message: `Completion rate improved across recent blocks — now ${Math.round(recent * 100)}%.` });
+  } else if (recent < older - 0.1 && recent < 0.7) {
+    signals.push({ type: "warning", message: `Completion rate has dropped across recent blocks — currently ${Math.round(recent * 100)}%.` });
+  } else if (avgRate >= 0.8) {
+    signals.push({ type: "positive", message: `Consistently completing ${Math.round(avgRate * 100)}% of sessions across recent blocks.` });
+  }
+
+  // Run adherence trend
+  const runBlocks = withSummary.filter(b => b.summary!.runAdherence !== undefined);
+  if (runBlocks.length >= 2) {
+    const rr = runBlocks.map(b => b.summary!.runAdherence!);
+    if (rr[0] < rr[rr.length - 1] - 0.1 && rr[0] < 0.7) {
+      signals.push({ type: "warning", category: "Run", message: `Run adherence declining — ${Math.round(rr[0] * 100)}% in last block vs ${Math.round(rr[rr.length - 1] * 100)}% previously.` });
+    } else if (rr[0] > rr[rr.length - 1] + 0.1 && rr[0] >= 0.8) {
+      signals.push({ type: "positive", category: "Run", message: `Run adherence improving — ${Math.round(rr[0] * 100)}% in last block.` });
+    }
+  }
+
+  // Strength adherence trend
+  const strBlocks = withSummary.filter(b => b.summary!.strengthAdherence !== undefined);
+  if (strBlocks.length >= 2) {
+    const sr = strBlocks.map(b => b.summary!.strengthAdherence!);
+    if (sr[0] < sr[sr.length - 1] - 0.1 && sr[0] < 0.7) {
+      signals.push({ type: "warning", category: "Strength", message: `Strength adherence declining — ${Math.round(sr[0] * 100)}% in last block vs ${Math.round(sr[sr.length - 1] * 100)}% previously.` });
+    } else if (sr[0] > sr[sr.length - 1] + 0.1 && sr[0] >= 0.8) {
+      signals.push({ type: "positive", category: "Strength", message: `Strength adherence improving — ${Math.round(sr[0] * 100)}% in last block.` });
+    }
+  }
+
+  // Incident pattern
+  const blocksWithIncidents = withSummary.filter(b => (b.summary!.incidentCount ?? 0) > 0);
+  if (blocksWithIncidents.length >= 2) {
+    signals.push({ type: "info", message: `Incidents logged in ${blocksWithIncidents.length} of the last ${withSummary.length} blocks — worth factoring into next block.` });
+  }
+
+  return signals;
+}
+
+const DURATION_OPTIONS = [4, 6, 8, 10, 12];
+
+function QueueBlockForm({ onQueue, suggestedGoal }: { onQueue: (goal: string, numWeeks: number) => Promise<void>; suggestedGoal: string }) {
+  const [nextGoal, setNextGoal] = useState(suggestedGoal);
+  const [numWeeks, setNumWeeks] = useState(6);
+  const [queuing, setQueuing] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <label className="text-[10px] tracking-[0.15em] uppercase text-stone-400 block mb-2">Next goal</label>
+        <input
+          type="text"
+          placeholder="e.g. Build, Taper, Hyrox"
+          value={nextGoal}
+          onChange={e => setNextGoal(e.target.value)}
+          className="w-full border-0 border-b border-stone-200 pb-2 text-sm bg-transparent focus:outline-none focus:border-stone-800 transition-colors placeholder:text-stone-300"
+        />
+      </div>
+      <div>
+        <label className="text-[10px] tracking-[0.15em] uppercase text-stone-400 block mb-2">Duration</label>
+        <div className="flex gap-1.5">
+          {DURATION_OPTIONS.map(w => (
+            <button
+              key={w}
+              onClick={() => setNumWeeks(w)}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
+                numWeeks === w
+                  ? "bg-stone-900 text-white"
+                  : "bg-stone-100 text-stone-500 hover:bg-stone-200"
+              }`}
+            >
+              {w}w
+            </button>
+          ))}
+        </div>
+      </div>
+      <button
+        onClick={async () => {
+          if (!nextGoal.trim()) return;
+          setQueuing(true);
+          await onQueue(nextGoal.trim(), numWeeks);
+          setQueuing(false);
+        }}
+        disabled={queuing || !nextGoal.trim()}
+        className="self-start text-[11px] tracking-[0.1em] uppercase text-stone-600 hover:text-stone-900 border border-stone-200 hover:border-stone-400 rounded-lg px-4 py-2 transition-colors disabled:opacity-40"
+      >
+        {queuing ? "Saving…" : "Queue next block"}
+      </button>
+    </div>
+  );
+}
+
+function BlockHistory({ blocks, crossBlockInsights }: { blocks: TrainingBlock[]; crossBlockInsights: InsightSignal[] }) {
+  return (
+    <div className="pt-6 border-t border-stone-100 flex flex-col gap-4">
+      <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400">History</p>
+
+      <div className="flex flex-col gap-3">
+        {blocks.map(block => (
+          <div key={block.id} className="rounded-xl border border-stone-100 bg-stone-50 px-4 py-3">
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-stone-800 truncate">{block.name}</p>
+                <p className="text-[11px] text-stone-400 mt-0.5">
+                  {formatDateShort(block.startDate)} — {formatDateShort(block.endDate)}
+                </p>
+              </div>
+              {block.summary ? (
+                <div className="text-right shrink-0">
+                  <p className="text-2xl font-black tabular-nums leading-none text-stone-800">
+                    {Math.round(block.summary.completionRate * 100)}%
+                  </p>
+                  <p className="text-[9px] uppercase tracking-wide text-stone-400 mt-0.5">
+                    {block.summary.completedSessions}/{block.summary.totalSessions}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-[11px] text-stone-300 shrink-0">No summary</p>
+              )}
+            </div>
+
+            {block.summary && (
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                {block.summary.runAdherence !== undefined && (
+                  <span className="flex items-center gap-1 text-[10px] text-stone-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
+                    Run {Math.round(block.summary.runAdherence * 100)}%
+                  </span>
+                )}
+                {block.summary.strengthAdherence !== undefined && (
+                  <span className="flex items-center gap-1 text-[10px] text-stone-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                    Strength {Math.round(block.summary.strengthAdherence * 100)}%
+                  </span>
+                )}
+                {block.summary.wodAdherence !== undefined && (
+                  <span className="flex items-center gap-1 text-[10px] text-stone-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-violet-400 inline-block" />
+                    WOD {Math.round(block.summary.wodAdherence * 100)}%
+                  </span>
+                )}
+                {(block.summary.incidentCount ?? 0) > 0 && (
+                  <span className="flex items-center gap-1 text-[10px] text-stone-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-stone-400 inline-block" />
+                    {block.summary.incidentCount} {block.summary.incidentCount === 1 ? "incident" : "incidents"}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {crossBlockInsights.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-[9px] tracking-[0.15em] uppercase text-stone-400">What this shows</p>
+          {crossBlockInsights.map((signal, i) => (
+            <InsightCard key={i} signal={signal} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface Props {
   activeBlock: TrainingBlock | null;
+  queuedBlock: TrainingBlock | null;
+  completedBlocks: TrainingBlock[];
   weeks: TrainingWeek[];
   currentWeek: TrainingWeek | null;
   todayDay: Day;
@@ -52,12 +238,16 @@ interface Props {
   onCategoryChange: (blockId: string, weekId: string, sessionId: string, newCategory: Category) => void;
   onEditPrescription: (blockId: string, weekId: string, sessionId: string, newCategory: Category, newPrescription: Prescription) => Promise<void>;
   onApplyChanges: (changes: SessionChange[], meta: { firstMessage: string; summary: string }) => Promise<void>;
+  onQueueBlock: (goal: string, numWeeks: number) => Promise<void>;
+  onRemoveQueuedBlock: () => Promise<void>;
+  onActivateQueuedBlock: () => Promise<void>;
 }
 
 export default function PlanView({
-  activeBlock, weeks, currentWeek, todayDay, goal, eventDate, creating,
+  activeBlock, queuedBlock, completedBlocks, weeks, currentWeek, todayDay, goal, eventDate, creating,
   onGoalChange, onEventDateChange, onSave, onCreateBlock,
   onToggleSession, onLogActual, onCategoryChange, onEditPrescription, onApplyChanges,
+  onQueueBlock, onRemoveQueuedBlock, onActivateQueuedBlock,
 }: Props) {
   const [weekView, setWeekView] = useState<WeekView>(null);
   const [regenerateWeekId, setRegenerateWeekId] = useState<string | null>(null);
@@ -68,6 +258,7 @@ export default function PlanView({
   const daysToRace = daysUntil(eventDate);
   const currentWeekIndex = weeks.findIndex(w => w.id === currentWeek?.id);
   const insights = computeInsights(weeks, 4);
+  const crossBlockInsights = computeCrossBlockInsights(completedBlocks);
 
   if (!activeBlock) {
     return (
@@ -101,6 +292,8 @@ export default function PlanView({
         >
           {creating ? "Generating plan…" : "Generate Training Block"}
         </button>
+
+        {completedBlocks.length > 0 && <BlockHistory blocks={completedBlocks} crossBlockInsights={crossBlockInsights} />}
       </div>
     );
   }
@@ -329,6 +522,44 @@ export default function PlanView({
           </button>
         </div>
       </div>
+
+      {/* Next block */}
+      <div className="pt-6 border-t border-stone-100 flex flex-col gap-4">
+        <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400">Next block</p>
+
+        {queuedBlock ? (
+          <div className="rounded-xl border border-stone-100 bg-stone-50 px-4 py-3 flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-stone-800">{queuedBlock.name}</p>
+                <p className="text-[11px] text-stone-400 mt-0.5">
+                  {formatDateShort(queuedBlock.startDate)} — {formatDateShort(queuedBlock.endDate)}
+                </p>
+              </div>
+              <span className="text-[9px] uppercase tracking-wide text-stone-400 bg-stone-200 px-2 py-1 rounded-full shrink-0">Queued</span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={onActivateQueuedBlock}
+                disabled={creating}
+                className="flex-1 bg-stone-900 hover:bg-stone-800 text-white text-[11px] font-semibold py-2.5 rounded-lg disabled:opacity-40 transition-colors tracking-wide"
+              >
+                {creating ? "Generating…" : "Activate → Generate Plan"}
+              </button>
+              <button
+                onClick={onRemoveQueuedBlock}
+                className="text-[11px] text-stone-400 hover:text-red-500 border border-stone-200 hover:border-red-200 px-3 py-2.5 rounded-lg transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ) : (
+          <QueueBlockForm onQueue={onQueueBlock} suggestedGoal={goal} />
+        )}
+      </div>
+
+      {completedBlocks.length > 0 && <BlockHistory blocks={completedBlocks} crossBlockInsights={crossBlockInsights} />}
 
     </div>
   );

@@ -10,7 +10,7 @@ import { computeInsights } from "../lib/analytics";
 interface Props {
   weeks: TrainingWeek[];
   coachHistory: CoachSessionLog[];
-  onApplyChanges: (changes: SessionChange[], meta: { firstMessage: string; summary: string }) => Promise<void>;
+  onApplyChanges: (changes: SessionChange[], meta: { firstMessage: string; summary: string; incidentType?: IncidentType }) => Promise<void>;
 }
 
 type Message =
@@ -223,7 +223,15 @@ export default function CoachChat({ weeks, coachHistory, onApplyChanges }: Props
     setApplying(true);
     const firstMsg = messages.find(m => m.role === "user")?.content ?? "";
     const lastCoach = [...messages].reverse().find(m => m.role === "coach") as (Message & { role: "coach" }) | undefined;
-    await onApplyChanges(currentChanges, { firstMessage: firstMsg, summary: lastCoach?.content ?? "" });
+    // Derive incident type from last coach message that had one (excludes "general")
+    const lastIncidentMsg = [...messages].reverse().find(
+      m => m.role === "coach" && (m as any).incidentType && (m as any).incidentType !== "general"
+    ) as (Message & { role: "coach"; incidentType?: IncidentType }) | undefined;
+    await onApplyChanges(currentChanges, {
+      firstMessage: firstMsg,
+      summary: lastCoach?.content ?? "",
+      incidentType: lastIncidentMsg?.incidentType,
+    });
     setApplying(false);
     reset();
   };

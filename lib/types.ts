@@ -126,13 +126,29 @@ export interface TrainingWeek {
   sessions: Session[];
 }
 
+export interface BlockSummary {
+  completionRate: number;       // 0–1
+  completedSessions: number;
+  totalSessions: number;
+  runAdherence?: number;        // 0–1, only if block had run sessions
+  strengthAdherence?: number;   // 0–1, only if block had strength sessions
+  wodAdherence?: number;        // 0–1, only if block had WOD sessions
+  incidentCount?: number;
+  completedAt: string;          // ISO date string, snapshot frozen at completion
+  // Run actuals — derived from session.actual at completion time
+  totalActualKm?: number;       // total km logged across all completed run sessions
+  longestActualRunKm?: number;  // longest single completed run in the block
+  avgEasyPaceSecs?: number;     // average easy run pace in seconds/km (lower = faster)
+}
+
 export interface TrainingBlock {
   id: string;
   name: string;
   primaryGoal: string;
-  status: "active" | "completed";
+  status: "active" | "completed" | "queued";
   startDate: string;
   endDate: string;
+  summary?: BlockSummary;       // written when status → "completed", absent on active/queued
 }
 
 // ─── Coach ────────────────────────────────────────────────────────────────────
@@ -162,6 +178,7 @@ export interface CoachSessionLog {
   summary: string;
   changesCount: number;
   changes: CoachSessionChange[];
+  incidentType?: IncidentType;  // set when session originated from handle-incident
 }
 
 export interface AdaptResponse {
