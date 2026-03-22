@@ -31,6 +31,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [view, setView] = useState<"today" | "plan" | "review" | "progress">("today");
+  const [stravaAthleteInfo, setStravaAthleteInfo] = useState<string | null>(null);
 
   const todayISO = new Date().toISOString().split("T")[0];
   const todayDate = new Date(todayISO);
@@ -117,6 +118,37 @@ export default function Home() {
     const historySnap = await getDocs(historyQuery);
     setCoachHistory(historySnap.docs.map(d => ({ id: d.id, ...d.data() } as CoachSessionLog)));
   }, []);
+
+  // Handle Strava OAuth callback params and load existing Strava connection
+  useEffect(() => {
+    if (!user) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const stravaParam = params.get("strava");
+
+    if (stravaParam === "connected") {
+      // Write tokens to Firestore from the client (which is authenticated)
+      const stravaRef = doc(db, "users", user.uid, "integrations", "strava");
+      setDoc(stravaRef, {
+        athleteId: Number(params.get("aid")),
+        athleteName: params.get("an") ?? "",
+        accessToken: params.get("at") ?? "",
+        refreshToken: params.get("rt") ?? "",
+        expiresAt: Number(params.get("ea")),
+        scope: "activity:read_all",
+        connectedAt: serverTimestamp(),
+      }).then(() => {
+        setStravaAthleteInfo(params.get("an"));
+        window.history.replaceState({}, "", window.location.pathname);
+      });
+    } else {
+      // Check for existing Strava connection on load
+      const stravaRef = doc(db, "users", user.uid, "integrations", "strava");
+      getDoc(stravaRef).then(snap => {
+        if (snap.exists()) setStravaAthleteInfo(snap.data().athleteName ?? null);
+      });
+    }
+  }, [user]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -551,6 +583,7 @@ export default function Home() {
       {/* Plan view */}
       {view === "plan" && (
         <PlanView
+          uid={user.uid}
           activeBlock={activeBlock}
           queuedBlock={queuedBlock}
           completedBlocks={completedBlocks}
@@ -560,6 +593,7 @@ export default function Home() {
           goal={goal}
           eventDate={eventDate}
           creating={creating}
+          stravaAthleteInfo={stravaAthleteInfo}
           onGoalChange={setGoal}
           onEventDateChange={setEventDate}
           onSave={handleSave}

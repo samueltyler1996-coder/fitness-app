@@ -220,6 +220,7 @@ function BlockHistory({ blocks, crossBlockInsights }: { blocks: TrainingBlock[];
 }
 
 interface Props {
+  uid: string;
   activeBlock: TrainingBlock | null;
   queuedBlock: TrainingBlock | null;
   completedBlocks: TrainingBlock[];
@@ -229,6 +230,7 @@ interface Props {
   goal: string;
   eventDate: string;
   creating: boolean;
+  stravaAthleteInfo: string | null;
   onGoalChange: (v: string) => void;
   onEventDateChange: (v: string) => void;
   onSave: () => Promise<void>;
@@ -244,7 +246,8 @@ interface Props {
 }
 
 export default function PlanView({
-  activeBlock, queuedBlock, completedBlocks, weeks, currentWeek, todayDay, goal, eventDate, creating,
+  uid, activeBlock, queuedBlock, completedBlocks, weeks, currentWeek, todayDay, goal, eventDate, creating,
+  stravaAthleteInfo,
   onGoalChange, onEventDateChange, onSave, onCreateBlock,
   onToggleSession, onLogActual, onCategoryChange, onEditPrescription, onApplyChanges,
   onQueueBlock, onRemoveQueuedBlock, onActivateQueuedBlock,
@@ -520,6 +523,34 @@ export default function PlanView({
           >
             {creating ? "Generating plan…" : "Generate New Training Block"}
           </button>
+        </div>
+
+        {/* Strava connection */}
+        <div className="pt-4 border-t border-stone-100">
+          {stravaAthleteInfo ? (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />
+                <span className="text-[11px] text-stone-600">Strava connected — {stravaAthleteInfo}</span>
+              </div>
+              <a
+                href={`/api/strava/authorize?uid=${uid}`}
+                className="text-[10px] tracking-[0.1em] uppercase text-stone-400 hover:text-stone-600 transition-colors"
+              >
+                Reconnect
+              </a>
+            </div>
+          ) : (
+            <a
+              href={`/api/strava/authorize?uid=${uid}`}
+              className="flex items-center gap-2 text-[11px] text-stone-600 hover:text-stone-900 border border-stone-200 hover:border-orange-300 rounded-lg px-4 py-2.5 transition-colors w-fit"
+            >
+              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-orange-500" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" />
+              </svg>
+              Connect Strava
+            </a>
+          )}
         </div>
       </div>
 
