@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   doc, setDoc, getDoc, collection, addDoc, serverTimestamp,
   query, where, getDocs, updateDoc, orderBy, writeBatch, limit, deleteDoc
@@ -8,7 +8,7 @@ import {
 import { signInWithPopup, signOut, GoogleAuthProvider, onAuthStateChanged, User } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
 import { TrainingBlock, TrainingWeek, Session, Category, Day, Actual, Prescription, SessionChange, CoachSessionChange, CoachSessionLog, IncidentType } from "../lib/types";
-import { computeBlockSummary } from "../lib/analytics";
+import { computeBlockSummary, formatProgressContext } from "../lib/analytics";
 import TodayView from "../components/TodayView";
 import PlanView from "../components/PlanView";
 import ReviewView from "../components/ReviewView";
@@ -35,6 +35,11 @@ export default function Home() {
   const todayISO = new Date().toISOString().split("T")[0];
   const todayDate = new Date(todayISO);
   const todayDay = todayDate.toLocaleDateString("en-US", { weekday: "long" }) as Day;
+
+  const progressContext = useMemo(
+    () => formatProgressContext(completedBlocks, coachHistory),
+    [completedBlocks, coachHistory]
+  );
 
   const currentWeek = weeks.find(week => {
     const start = new Date(week.startDate);
@@ -154,7 +159,7 @@ export default function Home() {
       const res = await fetch("/api/generate-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goal: goal || "Maintenance", eventDate, weeks: 6 }),
+        body: JSON.stringify({ goal: goal || "Maintenance", eventDate, weeks: 6, progressContext }),
       });
       if (!res.ok) throw new Error("API error");
       generatedPlan = await res.json();
@@ -296,7 +301,7 @@ export default function Home() {
       const res = await fetch("/api/generate-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goal: queuedBlock.primaryGoal, eventDate, weeks: qBlockWeeks }),
+        body: JSON.stringify({ goal: queuedBlock.primaryGoal, eventDate, weeks: qBlockWeeks, progressContext }),
       });
       if (!res.ok) throw new Error("API error");
       generatedPlan = await res.json();
@@ -583,7 +588,7 @@ export default function Home() {
       {/* Coach — always mounted so conversation survives view switches, only on Today */}
       {weeks.length > 0 && (
         <div className={view === "today" ? "" : "hidden"}>
-          <CoachChat weeks={weeks} coachHistory={coachHistory} onApplyChanges={applyChanges} />
+          <CoachChat weeks={weeks} coachHistory={coachHistory} progressContext={progressContext} onApplyChanges={applyChanges} />
         </div>
       )}
 

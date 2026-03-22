@@ -313,7 +313,7 @@ function missedSessionOptions(weeks: any[], affectedDay: string, today: Date): a
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  const { message, weeks, coachHistory, priorContext, insights } = await req.json();
+  const { message, weeks, coachHistory, priorContext, insights, progressContext } = await req.json();
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -336,9 +336,11 @@ export async function POST(req: NextRequest) {
       }).join("\n")}\n\n`
     : "";
 
+  const progressCtx = progressContext ? `${progressContext}\n\n` : "";
+
   const prompt = `You are an adaptive fitness coach. Classify an athlete's message about a problem with their training.
 
-${historyCtx}${insightsCtx}${priorCtxStr}Athlete message: "${message}"
+${progressCtx}${historyCtx}${insightsCtx}${priorCtxStr}Athlete message: "${message}"
 Today: ${today.toISOString().split("T")[0]}
 
 Respond with valid JSON only. No text before or after the JSON.

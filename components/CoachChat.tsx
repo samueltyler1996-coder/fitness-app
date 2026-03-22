@@ -10,6 +10,7 @@ import { computeInsights } from "../lib/analytics";
 interface Props {
   weeks: TrainingWeek[];
   coachHistory: CoachSessionLog[];
+  progressContext: string;
   onApplyChanges: (changes: SessionChange[], meta: { firstMessage: string; summary: string; incidentType?: IncidentType }) => Promise<void>;
 }
 
@@ -100,7 +101,7 @@ function missableSessionDays(weeks: TrainingWeek[]): string[] {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function CoachChat({ weeks, coachHistory, onApplyChanges }: Props) {
+export default function CoachChat({ weeks, coachHistory, progressContext, onApplyChanges }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [currentChanges, setCurrentChanges] = useState<SessionChange[]>([]);
@@ -132,6 +133,7 @@ export default function CoachChat({ weeks, coachHistory, onApplyChanges }: Props
         weeks: weeks.slice(0, 3),
         coachHistory,
         insights,
+        progressContext,
       }),
     });
     if (!res.ok) throw new Error("API error");
@@ -146,7 +148,7 @@ export default function CoachChat({ weeks, coachHistory, onApplyChanges }: Props
     const res = await fetch("/api/handle-incident", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, weeks, coachHistory, priorContext: incidentContext, insights }),
+      body: JSON.stringify({ message: text, weeks, coachHistory, priorContext: incidentContext, insights, progressContext }),
     });
     if (!res.ok) throw new Error("API error");
     const data: IncidentResponse = await res.json();

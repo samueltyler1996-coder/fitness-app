@@ -4,13 +4,16 @@ import { NextRequest, NextResponse } from "next/server";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export async function POST(req: NextRequest) {
-  const { goal, eventDate, weeks } = await req.json();
+  const { goal, eventDate, weeks, progressContext } = await req.json();
+
+  const progressCtx = progressContext ? `\nAthlete history from previous blocks:\n${progressContext}\n\nUse this to calibrate volume, intensity, and session complexity. For example: if run adherence has been low, don't overload with runs; if strength is consistently missed, keep it simple; if pace is improving, you can push tempo targets slightly harder.\n` : "";
 
   const prompt = `You are an expert running and strength coach specialising in Hyrox, hybrid fitness, and endurance events. Generate a ${weeks}-week training plan for an athlete with the following profile:
 
 - Primary goal: ${goal}
 - Event/race date: ${eventDate || "not specified"}
 - Block duration: ${weeks} weeks
+${progressCtx}
 
 Return ONLY a valid JSON object matching the exact structure below. No markdown, no code fences, no explanation.
 

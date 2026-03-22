@@ -382,3 +382,80 @@ export function computeProgressInsights(
 
   return signals;
 }
+
+// ─── Progress context for AI prompts ─────────────────────────────────────────
+// Produces a compact plain-text summary of the athlete's cross-block history.
+// Returns empty string if there is not enough data to say anything useful.
+
+export function formatProgressContext(
+  completedBlocks: TrainingBlock[],
+  coachHistory: CoachSessionLog[],
+): string {
+  const withSummary = completedBlocks.filter(b => b.summary).slice(0, 4);
+  if (withSummary.length === 0) return "";
+
+  const lines: string[] = ["Athlete cross-block history:"];
+
+  // Run volume trend (oldest → newest)
+  const runVol = withSummary.filter(b => b.summary!.totalActualKm !== undefined);
+  if (runVol.length >= 2) {
+    const kms = [...runVol].reverse().map(b => `${Math.round(b.summary!.totalActualKm!)}km`).join(" → ");
+    lines.push(`- Run volume per block: ${kms}`);
+  }
+
+  // Easy pace
+  const paceBlock = withSummary.find(b => b.summary!.avgEasyPaceSecs !== undefined);
+  if (paceBlock) {
+    lines.push(`- Easy run pace (most recent block): ${secsTopace(paceBlock.summary!.avgEasyPaceSecs!)}`);
+  }
+
+  // Longest run
+  const longestBlock = withSummary.find(b => b.summary!.longestActualRunKm !== undefined);
+  if (longestBlock) {
+    lines.push(`- Longest run logged: ${longestBlock.summary!.longestActualRunKm!.toFixed(1)}km`);
+  }
+
+  // Adherence averages
+  const runAdh = withSummary.filter(b => b.summary!.runAdherence !== undefined);
+  if (runAdh.length >= 1) {
+    const avg = Math.round(runAdh.reduce((s, b) => s + b.summary!.runAdherence!, 0) / runAdh.length * 100);
+    lines.push(`- Run adherence average: ${avg}%`);
+  }
+  const strAdh = withSummary.filter(b => b.summary!.strengthAdherence !== undefined);
+  if (strAdh.length >= 1) {
+    const avg = Math.round(strAdh.reduce((s, b) => s + b.summary!.strengthAdherence!, 0) / strAdh.length * 100);
+    lines.push(`- Strength adherence average: ${avg}%`);
+  }
+
+  // Overall completion
+  const rates = withSummary.map(b => b.summary!.completionRate);
+  const avgCompletion = Math.round(rates.reduce((s, r) => s + r, 0) / rates.length * 100);
+  lines.push(`- Overall completion average: ${avgCompletion}%`);
+
+  // Incident history
+  const incidentCounts: Partial<Record<IncidentType, number>> = {};
+  for (const s of coachHistory) {
+    if (s.incidentType && s.incidentType !== "general") {
+      incidentCounts[s.incidentType] = (incidentCounts[s.incidentType] ?? 0) + 1;
+    }
+  }
+  const incidentSummary = Object.entries(incidentCounts)
+    .map(([t, c]) => `${t.replace("_", " ")} x${c}`)
+    .join(", ");
+  if (incidentSummary) lines.push(`- Logged incidents: ${incidentSummary}`);
+
+  // Most-adjusted category
+  const changeCounts: Record<string, number> = {};
+  for (const session of coachHistory) {
+    for (const change of session.changes ?? []) {
+      const cat = change.toCategory ?? change.fromCategory;
+      if (cat) changeCounts[cat] = (changeCounts[cat] ?? 0) + 1;
+    }
+  }
+  const topCat = Object.entries(changeCounts).sort((a, b) => b[1] - a[1])[0];
+  if (topCat && topCat[1] >= 2) {
+    lines.push(`- Most coach-adjusted session type: ${topCat[0]} (${topCat[1]} times)`);
+  }
+
+  return lines.join("\n");
+}
