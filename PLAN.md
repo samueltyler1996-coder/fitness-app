@@ -1,6 +1,6 @@
 # Fitness App — Product Plan
 
-_Last updated: 2026-03-21 (session 2)_
+_Last updated: 2026-03-22 (session 3)_
 
 ---
 
@@ -62,7 +62,7 @@ Home = dashboard (not a list). Editing = separate experience.
 
 ---
 
-## What's Next (Prioritised)
+## Phases
 
 ### Phase A — Dashboard Polish ✓
 - [x] Progress indicator on ActiveBlock (Week N of M, days to race, segmented bar)
@@ -83,36 +83,57 @@ Home = dashboard (not a list). Editing = separate experience.
 ### Phase C — Planning / Editing Screen ✓
 _Goal: separate the "what am I doing today" dashboard from the "let me manage my plan" editor._
 
-- [x] Dedicated planning view (`/plan` route with week grid, progress bar, block settings)
+- [x] Dedicated planning view (week grid, progress bar, block settings)
 - [x] Edit a session prescription manually (SessionEditModal with validation)
 - [x] Regenerate a single week (RegenerateWeekModal + `/api/regenerate-week`)
-- [x] Adjust block end date / goal (Block Settings on /plan page)
+- [x] Adjust block end date / goal (Block Settings on plan view)
 - [x] Mark sessions as manually modified ("edited" badge + warn-before-overwrite in coach + regenerate)
 - [x] Plan page interaction: day square → session detail, W1 label → full week management
 - [x] SessionDetail: structured training-sheet layout with 2-line exercise rows
 
-### Phase D — Deterministic Adaptation Rules
+### Phase D — Deterministic Adaptation Rules ✓
 _Goal: safe, predictable adaptation before relying purely on AI._
 
-- [ ] Illness flow: reduce/cancel N sessions, preserve audit trail
-- [ ] Injury flow: downgrade multiple future weeks
-- [ ] Missed session: suggest recovery or continuation
-- [ ] Rules-based first, AI-assisted second — keeps behaviour explainable
+- [x] Illness flow: mild/moderate/severe — downgrade or cancel sessions over 7-day window
+- [x] Injury flow: body-part to modality mapping, 1–all-remaining weeks affected by severity
+- [x] Fatigue flow: deload week on severe, downgrade on moderate
+- [x] Missed session: 3-option recovery flow (continue / move / drop)
+- [x] Clarification chips when severity is ambiguous
+- [x] Rules-based first, AI classification second — keeps behaviour explainable
+- [x] `/api/handle-incident` route with Gemini classification + deterministic rule engine
 
-### Phase E — Historical Review + Analytics
+### Phase E — Historical Review + Analytics ✓
 _Goal: the app should know how training is going, not just what's planned._
 
-- [ ] Block review: completion rate, plan vs actual comparison
-- [ ] Session adherence trends
-- [ ] Highlight missed sessions or repeated issues
-- [ ] Feed into future AI adaptation: lower adherence → reduce complexity, strong consistency → progress more
+- [x] Block review: completion rate, plan vs actual comparison (`ReviewView`)
+- [x] Week-by-week completion grid (colour-coded: green/amber/red)
+- [x] Category breakdown with progress bars (Run / Strength / WOD)
+- [x] Run log: last 12 completed runs, planned vs actual km + effort
+- [x] Insight signals: per-category miss patterns, completion trend, run km shortfall (`computeInsights`)
+- [x] `lib/analytics.ts`: `computeWeekMetrics`, `computeBlockMetrics`, `computeInsights`
 
-### Phase F — Multi-Block Planning
+### Phase F — Block Sequencing ✓
 _Goal: support a training journey over time, not just one cycle._
 
-- [ ] Queue future blocks (e.g. Base → Build → Taper)
-- [ ] View completed block history
-- [ ] Transition logic between blocks
+- [x] Block status extended: `"active" | "completed" | "queued"`
+- [x] `fetchBlockData` fetches all blocks, splits by status in code (single query, not per-status)
+- [x] `BlockSummary` written to Firestore when block completes — snapshot frozen at completion (completionRate, adherence by category, run actuals, incidentCount)
+- [x] Completed block history in Plan view: cards with name, dates, completion %, per-category adherence pills
+- [x] Cross-block insight signals in Plan view ("What this shows") — `computeCrossBlockInsights`
+- [x] Queue next block: goal input + duration selector (4 / 6 / 8 / 10 / 12 weeks), dates auto-set from active block end
+- [x] Remove queued block
+- [x] Activate queued block: generates sessions via AI, completes current block with summary, promotes queued → active
+- [x] Max 1 active + max 1 queued enforced in data layer
+
+### Phase G — Athlete Progress Intelligence ✓
+_Goal: the app remembers and learns — longitudinal trends across blocks, not just within one._
+
+- [x] `BlockSummary` enriched with run actuals at completion: `totalActualKm`, `longestActualRunKm`, `avgEasyPaceSecs` (pace stored as seconds/km for clean trend comparison)
+- [x] `CoachSessionLog` now tags `incidentType` — written to Firestore when incident changes are applied
+- [x] `computeProgressInsights`: rule-based signal engine across blocks + coach history — run volume trend, easy pace trend, adherence trends, incident frequency, coaching pattern flags
+- [x] `secsTopace` utility: converts stored pace seconds back to display string
+- [x] `ProgressView` component: run volume bar chart (oldest → latest), current easy pace, signal cards grouped by run/strength/incidents/coaching, incident log with type + date
+- [x] Progress nav tab added (Today / Plan / Review / Progress)
 
 ---
 
@@ -124,6 +145,28 @@ _Goal: support a training journey over time, not just one cycle._
 - Sessions sorted Mon→Sun client-side (Firestore doesn't guarantee order)
 - One block has `status === "active"` at a time — new block marks old as `"completed"`
 - AI adaptation goes through human-in-the-loop confirmation before writing to Firestore
+- Completed block summaries are snapshots frozen at completion — not recomputed retroactively
+- Cross-block trends read from block-level summaries only (cheap); session-level deep dive is lazy-loaded on demand
+- Rule-based signals first, AI synthesis later
+
+---
+
+## What's Next
+
+### Phase H — Feed Progress into Adaptation
+_Goal: close the loop — what the app knows about you should inform what it prescribes._
+
+- [ ] Pass `ProgressSignal[]` into `/api/adapt-plan` and `/api/handle-incident` prompts
+- [ ] Coach references trend context when proposing changes ("your run volume has been dropping — I'll keep this week light")
+- [ ] Strong adherence → AI can progress more assertively in generate-plan
+- [ ] Recurring injury pattern → protect affected modality in future blocks
+
+### Phase I — Deep Drill-Down (Lazy Session Fetch)
+_Goal: let the user explore past block data in detail without slowing the main load._
+
+- [ ] Tap a completed block in history → expand to see full week grid + session list
+- [ ] Fetch sessions from completed blocks on demand (not on initial load)
+- [ ] Strength load progression per exercise (if actual data is logged consistently)
 
 ---
 
