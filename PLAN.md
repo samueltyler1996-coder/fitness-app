@@ -1,6 +1,6 @@
 # Fitness App — Product Plan
 
-_Last updated: 2026-03-22 (session 3)_
+_Last updated: 2026-03-22 (session 4)_
 
 ---
 
@@ -153,13 +153,15 @@ _Goal: the app remembers and learns — longitudinal trends across blocks, not j
 
 ## What's Next
 
-### Phase H — Feed Progress into Adaptation
+### Phase H — Feed Progress into Adaptation ✓
 _Goal: close the loop — what the app knows about you should inform what it prescribes._
 
-- [ ] Pass `ProgressSignal[]` into `/api/adapt-plan` and `/api/handle-incident` prompts
-- [ ] Coach references trend context when proposing changes ("your run volume has been dropping — I'll keep this week light")
-- [ ] Strong adherence → AI can progress more assertively in generate-plan
-- [ ] Recurring injury pattern → protect affected modality in future blocks
+- [x] `formatProgressContext()` in `lib/analytics.ts` — serialises completed block summaries + coach history into compact plain-text for AI prompts
+- [x] Computed once via `useMemo` in `app/page.tsx`, passed to CoachChat and both block creation functions
+- [x] `/api/adapt-plan` — receives and injects `progressContext` before conversation history
+- [x] `/api/handle-incident` — receives and injects `progressContext` before classification prompt
+- [x] `/api/generate-plan` — receives `progressContext` with explicit calibration instruction: use history to adjust volume, intensity, and session complexity
+- [x] Empty-safe: returns `""` if no completed block summaries exist, all APIs unchanged for new accounts
 
 ### Phase I — Deep Drill-Down (Lazy Session Fetch)
 _Goal: let the user explore past block data in detail without slowing the main load._
@@ -167,6 +169,38 @@ _Goal: let the user explore past block data in detail without slowing the main l
 - [ ] Tap a completed block in history → expand to see full week grid + session list
 - [ ] Fetch sessions from completed blocks on demand (not on initial load)
 - [ ] Strength load progression per exercise (if actual data is logged consistently)
+
+### Phase J — Strava Integration
+_Goal: auto-populate actual run data from Strava instead of manual logging._
+
+**OAuth flow (Option A — UID as state):**
+- [ ] `GET /api/strava/authorize` — builds Strava OAuth URL with `state=uid`, redirects
+- [ ] `GET /api/strava/callback` — exchanges code for tokens, writes to `users/{uid}/integrations/strava`
+- [ ] Firestore structure: `users/{uid}/integrations/strava` — athleteId, accessToken, refreshToken, expiresAt, scope, connectedAt
+
+**Token + activity layer:**
+- [ ] `lib/strava.ts` — `getValidAccessToken(uid)` handles 6-hour expiry and refresh automatically
+- [ ] `GET /api/strava/activities` — fetches activities for a date range, returns mapped array
+
+**Activity → session matching:**
+- [ ] Match by date (session day X → Strava activities between X 00:00–23:59), filter type === "Run"
+- [ ] If multiple: pick closest to `prescription.distanceKm`
+- [ ] Map to `Actual`: distanceKm, pace (computed from moving_time/distance), effort (from HR or perceived_exertion), notes (activity name)
+
+**UI:**
+- [ ] "Connect Strava" button in Block Settings / profile area
+- [ ] Connected state display (athlete name)
+- [ ] Auto-fill actual in `SessionDetail` when opening a Run session — silently check Strava, pre-fill log input
+- [ ] New env vars: `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `NEXT_PUBLIC_APP_URL`
+
+### Phase K — WhatsApp Coach
+_Goal: interact with the coach conversationally on the go via WhatsApp, for free._
+
+- [ ] Twilio free tier or Meta Cloud API (free up to 1,000 conversations/month)
+- [ ] `POST /api/whatsapp` webhook — receives messages, routes to existing handle-incident or adapt-plan
+- [ ] Phone number → Firestore UID mapping on user doc
+- [ ] Human-in-the-loop confirmation via reply keywords (YES/NO to apply proposed changes)
+- [ ] Conversation state in Firestore for pending changes awaiting confirmation
 
 ---
 
