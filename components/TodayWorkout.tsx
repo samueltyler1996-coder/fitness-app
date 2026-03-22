@@ -32,6 +32,9 @@ export default function TodayWorkout({ session, blockId, weekId, stravaToken, on
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [stravaActivity, setStravaActivity] = useState<StravaActivity | null>(null);
+  const [stravaExpanded, setStravaExpanded] = useState(false);
+  const [stravaNote, setStravaNote] = useState("");
+  const [stravaSaving, setStravaSaving] = useState(false);
 
   const dayLabel = new Date().toLocaleDateString("en-GB", { weekday: "long" });
   const todayISO = new Date().toISOString().split("T")[0];
@@ -51,17 +54,24 @@ export default function TodayWorkout({ session, blockId, weekId, stravaToken, on
       .catch(() => {});
   }, [isRun, stravaToken, todayISO, session?.id, session?.completed]);
 
-  const handleStravaImport = () => {
-    if (!stravaActivity) return;
+  const handleStravaConfirm = async (note: string) => {
+    if (!stravaActivity || !blockId || !weekId || !onLogActual) return;
+    setStravaSaving(true);
     const distanceKm = Math.round(stravaActivity.distance / 100) / 10;
     const pace = computePaceStr(stravaActivity.moving_time, stravaActivity.distance);
     const effort = inferEffort(stravaActivity.perceived_exertion, stravaActivity.average_heartrate);
-    const raw = `${distanceKm} km at ${pace} — from Strava`;
-    setLogText(raw);
-    setParsed({
-      summary: `${distanceKm} km · ${pace}${effort ? ` · ${effort} effort` : ""} — "${stravaActivity.name}" (Strava)`,
-      actual: { distanceKm, pace, effort: effort ?? null },
-    });
+    const actual: Actual = {
+      distanceKm,
+      pace,
+      effort: effort ?? null,
+      rawText: `${distanceKm} km at ${pace} — from Strava: "${stravaActivity.name}"`,
+      ...(note.trim() ? { notes: note.trim() } : {}),
+    };
+    await onLogActual(blockId, weekId, session!.id, actual);
+    if (!completed && onToggle) await onToggle(blockId, weekId, session!.id, false);
+    setStravaExpanded(false);
+    setStravaNote("");
+    setStravaSaving(false);
   };
 
   if (!session || !session.category) {
@@ -339,23 +349,54 @@ export default function TodayWorkout({ session, blockId, weekId, stravaToken, on
           )}
 
           {/* Not completed — input panel */}
-          {!completed && !parsed && (
+          {!completed && stravaExpanded && stravaActivity && (
+            <div className="bg-orange-50 border border-orange-100 rounded-2xl px-4 py-4 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-orange-500 shrink-0" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" />
+                  </svg>
+                  <span className="text-[13px] font-semibold text-orange-700">
+                    {(stravaActivity.distance / 1000).toFixed(1)} km · {computePaceStr(stravaActivity.moving_time, stravaActivity.distance)}
+                  </span>
+                  <span className="text-[11px] text-orange-400 truncate">{stravaActivity.name}</span>
+                </div>
+                <button onClick={() => setStravaExpanded(false)} className="text-orange-300 hover:text-orange-500 text-lg leading-none ml-2 shrink-0">×</button>
+              </div>
+              <input
+                type="text"
+                value={stravaNote}
+                onChange={e => setStravaNote(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleStravaConfirm(stravaNote)}
+                placeholder="Add a comment (optional)"
+                className="bg-white border border-orange-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-orange-400 transition-colors placeholder:text-orange-200"
+                autoFocus
+              />
+              <button
+                onClick={() => handleStravaConfirm(stravaNote)}
+                disabled={stravaSaving}
+                className="w-full bg-stone-900 hover:bg-stone-800 text-white text-[11px] tracking-[0.1em] uppercase py-3 rounded-xl disabled:opacity-40 transition-colors"
+              >{stravaSaving ? "Saving…" : "Save & complete"}</button>
+            </div>
+          )}
+
+          {!completed && !parsed && !stravaExpanded && (
             <div className="bg-stone-50 rounded-2xl px-4 py-4 flex flex-col gap-3">
               <p className="text-[10px] tracking-[0.15em] uppercase text-stone-400">How did it go?</p>
               {isRun && stravaActivity && (
                 <div className="flex items-center justify-between bg-orange-50 border border-orange-100 rounded-xl px-3 py-2.5">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-orange-500 shrink-0" xmlns="http://www.w3.org/2000/svg">
                       <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" />
                     </svg>
                     <span className="text-[12px] text-orange-700 font-medium">
                       {(stravaActivity.distance / 1000).toFixed(1)} km · {computePaceStr(stravaActivity.moving_time, stravaActivity.distance)}
                     </span>
-                    <span className="text-[10px] text-orange-400 truncate max-w-[100px]">{stravaActivity.name}</span>
+                    <span className="text-[10px] text-orange-400 truncate">{stravaActivity.name}</span>
                   </div>
                   <button
-                    onClick={handleStravaImport}
-                    className="text-[11px] tracking-[0.05em] uppercase text-orange-600 hover:text-orange-900 font-semibold transition-colors shrink-0"
+                    onClick={() => setStravaExpanded(true)}
+                    className="text-[11px] tracking-[0.05em] uppercase text-orange-600 hover:text-orange-900 font-semibold transition-colors shrink-0 ml-2"
                   >
                     Import →
                   </button>
