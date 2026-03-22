@@ -158,6 +158,13 @@ export default function Home() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
+        const allowedEmail = process.env.NEXT_PUBLIC_ALLOWED_EMAIL;
+        if (allowedEmail && currentUser.email !== allowedEmail) {
+          await signOut(auth);
+          setLoading(false);
+          return;
+        }
+
         const userRef = doc(db, "users", currentUser.uid);
         const userSnap = await getDoc(userRef);
 
