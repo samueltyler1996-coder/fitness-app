@@ -70,6 +70,8 @@ export default function SessionDetail({ session, blockId, weekId, isToday, strav
     ? (wodP?.sections?.main?.wodName ?? WOD_FORMAT[wodP?.format ?? ""] ?? "WOD")
     : "Rest";
 
+  const WORKOUT_TYPE_LABEL: Record<number, string> = { 1: "race", 2: "long_run", 3: "workout" };
+
   const handleStravaConfirm = async (note: string) => {
     if (!stravaActivity) return;
     setStravaSaving(true);
@@ -82,6 +84,12 @@ export default function SessionDetail({ session, blockId, weekId, isToday, strav
       effort: effort ?? null,
       rawText: `${distanceKm} km at ${pace} — from Strava: "${stravaActivity.name}"`,
       ...(note.trim() ? { notes: note.trim() } : {}),
+      ...(stravaActivity.average_heartrate ? { avgHr: Math.round(stravaActivity.average_heartrate) } : {}),
+      ...(stravaActivity.total_elevation_gain ? { elevationGain: Math.round(stravaActivity.total_elevation_gain) } : {}),
+      ...(stravaActivity.suffer_score ? { sufferScore: stravaActivity.suffer_score } : {}),
+      ...(stravaActivity.workout_type && WORKOUT_TYPE_LABEL[stravaActivity.workout_type]
+        ? { workoutType: WORKOUT_TYPE_LABEL[stravaActivity.workout_type] } : {}),
+      ...(stravaActivity.achievement_count ? { achievements: stravaActivity.achievement_count } : {}),
     };
     await onLogActual(blockId, weekId, session.id, actual);
     if (!session.completed) await onToggle(blockId, weekId, session.id, false);
@@ -354,6 +362,11 @@ export default function SessionDetail({ session, blockId, weekId, isToday, strav
             {session.actual.distanceKm && <span className="font-semibold">{session.actual.distanceKm} km</span>}
             {session.actual.pace && <span className="text-stone-500">{session.actual.pace}</span>}
             {session.actual.effort && <span className="text-stone-500 capitalize">{session.actual.effort} effort</span>}
+            {session.actual.avgHr && <span className="text-stone-500">♥ {session.actual.avgHr} bpm</span>}
+            {session.actual.elevationGain ? <span className="text-stone-500">↑ {session.actual.elevationGain}m</span> : null}
+            {session.actual.sufferScore ? <span className="text-stone-500">effort score {session.actual.sufferScore}</span> : null}
+            {session.actual.workoutType && <span className="text-stone-500 capitalize">{session.actual.workoutType.replace("_", " ")}</span>}
+            {session.actual.achievements ? <span className="text-stone-500">🏆 {session.actual.achievements} PR{session.actual.achievements > 1 ? "s" : ""}</span> : null}
             {session.actual.notes && <span className="text-stone-400 italic w-full">{session.actual.notes}</span>}
           </div>
         </div>
@@ -387,6 +400,14 @@ export default function SessionDetail({ session, blockId, weekId, isToday, strav
                     </div>
                     <button onClick={() => setStravaExpanded(false)} className="text-orange-300 hover:text-orange-500 text-base leading-none ml-2 shrink-0">×</button>
                   </div>
+                  {(stravaActivity.average_heartrate || stravaActivity.total_elevation_gain || stravaActivity.suffer_score || stravaActivity.achievement_count) && (
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                      {stravaActivity.average_heartrate && <span className="text-[10px] text-orange-500">♥ {Math.round(stravaActivity.average_heartrate)} bpm</span>}
+                      {stravaActivity.total_elevation_gain ? <span className="text-[10px] text-orange-500">↑ {Math.round(stravaActivity.total_elevation_gain)}m</span> : null}
+                      {stravaActivity.suffer_score ? <span className="text-[10px] text-orange-500">effort {stravaActivity.suffer_score}</span> : null}
+                      {stravaActivity.achievement_count ? <span className="text-[10px] text-orange-500">🏆 {stravaActivity.achievement_count} PR{stravaActivity.achievement_count > 1 ? "s" : ""}</span> : null}
+                    </div>
+                  )}
                   <input
                     type="text"
                     value={stravaNote}

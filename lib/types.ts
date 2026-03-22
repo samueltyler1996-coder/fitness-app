@@ -102,6 +102,12 @@ export interface Actual {
   effort?: "easy" | "moderate" | "hard" | null;
   notes?: string | null;
   rawText?: string;
+  // Strava-enriched fields
+  avgHr?: number | null;
+  elevationGain?: number | null;  // metres
+  sufferScore?: number | null;
+  workoutType?: string | null;    // "race" | "long_run" | "workout"
+  achievements?: number | null;   // PR count
 }
 
 // ─── Session ──────────────────────────────────────────────────────────────────

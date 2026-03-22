@@ -6,11 +6,17 @@ export interface StravaActivity {
   name: string;
   type: string;
   sport_type: string;
-  start_date: string;          // ISO 8601
-  distance: number;            // metres
-  moving_time: number;         // seconds
+  start_date: string;             // ISO 8601
+  distance: number;               // metres
+  moving_time: number;            // seconds
+  total_elevation_gain?: number;  // metres
   average_heartrate?: number;
-  perceived_exertion?: number; // 1–10 RPE, Strava calls it "perceived_exertion"
+  max_heartrate?: number;
+  average_cadence?: number;       // steps/min
+  suffer_score?: number;          // Strava relative effort 1–100
+  workout_type?: number;          // 0=default, 1=race, 2=long_run, 3=workout
+  achievement_count?: number;     // PRs set on this activity
+  perceived_exertion?: number;    // 1–10 RPE
 }
 
 export interface StravaIntegration {
