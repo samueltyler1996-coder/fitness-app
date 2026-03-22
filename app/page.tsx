@@ -522,8 +522,12 @@ export default function Home() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
-        <div className="text-gray-400 text-sm">Loading...</div>
+      <main className="flex min-h-screen items-center justify-center bg-stone-950">
+        <div className="flex flex-col items-center gap-6 animate-pulse">
+          <div className="w-20 h-20 rounded-2xl bg-stone-900 flex items-center justify-center">
+            <span className="text-4xl font-black text-white tracking-tighter">C</span>
+          </div>
+        </div>
       </main>
     );
   }
