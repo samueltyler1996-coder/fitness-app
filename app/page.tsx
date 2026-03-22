@@ -32,6 +32,7 @@ export default function Home() {
   const [creating, setCreating] = useState(false);
   const [view, setView] = useState<"today" | "plan" | "review" | "progress">("today");
   const [stravaAthleteInfo, setStravaAthleteInfo] = useState<string | null>(null);
+  const [stravaAccessToken, setStravaAccessToken] = useState<string | null>(null);
 
   const todayISO = new Date().toISOString().split("T")[0];
   const todayDate = new Date(todayISO);
@@ -127,25 +128,29 @@ export default function Home() {
     const stravaParam = params.get("strava");
 
     if (stravaParam === "connected") {
-      // Write tokens to Firestore from the client (which is authenticated)
+      const at = params.get("at") ?? "";
       const stravaRef = doc(db, "users", user.uid, "integrations", "strava");
       setDoc(stravaRef, {
         athleteId: Number(params.get("aid")),
         athleteName: params.get("an") ?? "",
-        accessToken: params.get("at") ?? "",
+        accessToken: at,
         refreshToken: params.get("rt") ?? "",
         expiresAt: Number(params.get("ea")),
         scope: "activity:read_all",
         connectedAt: serverTimestamp(),
       }).then(() => {
         setStravaAthleteInfo(params.get("an"));
+        setStravaAccessToken(at);
         window.history.replaceState({}, "", window.location.pathname);
       });
     } else {
-      // Check for existing Strava connection on load
       const stravaRef = doc(db, "users", user.uid, "integrations", "strava");
       getDoc(stravaRef).then(snap => {
-        if (snap.exists()) setStravaAthleteInfo(snap.data().athleteName ?? null);
+        if (!snap.exists()) return;
+        const data = snap.data();
+        setStravaAthleteInfo(data.athleteName ?? null);
+        const nowSecs = Math.floor(Date.now() / 1000);
+        if (data.expiresAt > nowSecs + 60) setStravaAccessToken(data.accessToken ?? null);
       });
     }
   }, [user]);
@@ -575,7 +580,7 @@ export default function Home() {
           todayDay={todayDay}
           goal={goal}
           eventDate={eventDate}
-          uid={user.uid}
+          stravaToken={stravaAccessToken ?? undefined}
           onToggleSession={toggleSession}
           onLogActual={logActual}
         />
@@ -595,6 +600,7 @@ export default function Home() {
           eventDate={eventDate}
           creating={creating}
           stravaAthleteInfo={stravaAthleteInfo}
+          stravaToken={stravaAccessToken ?? undefined}
           onGoalChange={setGoal}
           onEventDateChange={setEventDate}
           onSave={handleSave}

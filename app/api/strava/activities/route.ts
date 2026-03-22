@@ -1,18 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getValidAccessToken, StravaActivity } from "../../../../lib/strava";
+import { StravaActivity } from "../../../../lib/strava";
 
 export async function POST(req: NextRequest) {
-  const { uid, after, before } = await req.json();
+  const { accessToken, after, before } = await req.json();
 
-  if (!uid || !after || !before) {
-    return NextResponse.json({ error: "Missing uid, after, or before" }, { status: 400 });
-  }
-
-  let accessToken: string;
-  try {
-    accessToken = await getValidAccessToken(uid);
-  } catch {
-    return NextResponse.json({ error: "Strava not connected" }, { status: 401 });
+  if (!accessToken || !after || !before) {
+    return NextResponse.json({ error: "Missing accessToken, after, or before" }, { status: 400 });
   }
 
   // Convert ISO date strings to Unix timestamps
@@ -30,7 +23,6 @@ export async function POST(req: NextRequest) {
 
   const activities: StravaActivity[] = await res.json();
 
-  // Return only runs
   const runs = activities.filter(
     a => a.type === "Run" || a.sport_type === "Run"
   );

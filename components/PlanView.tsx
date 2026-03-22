@@ -241,6 +241,7 @@ interface Props {
   eventDate: string;
   creating: boolean;
   stravaAthleteInfo: string | null;
+  stravaToken?: string;
   onGoalChange: (v: string) => void;
   onEventDateChange: (v: string) => void;
   onSave: () => Promise<void>;
@@ -257,7 +258,7 @@ interface Props {
 
 export default function PlanView({
   uid, activeBlock, queuedBlock, completedBlocks, weeks, currentWeek, todayDay, goal, eventDate, creating,
-  stravaAthleteInfo,
+  stravaAthleteInfo, stravaToken,
   onGoalChange, onEventDateChange, onSave, onCreateBlock,
   onToggleSession, onLogActual, onCategoryChange, onEditPrescription, onApplyChanges,
   onQueueBlock, onRemoveQueuedBlock, onActivateQueuedBlock,
@@ -373,11 +374,16 @@ export default function PlanView({
           </div>
         </div>
 
-        {/* Day header */}
-        <div className="flex items-center gap-2 mb-1 pl-10">
+        {/* Day header — mirrors week row structure exactly so columns align */}
+        <div className="flex items-center gap-2 mb-1 px-2">
+          <div className="w-8 shrink-0" />
           {DAY_ABBR.map((d, i) => (
             <div key={i} className="flex-1 text-center text-[9px] uppercase tracking-wide text-stone-300">{d}</div>
           ))}
+          <div className="flex items-center gap-1.5 ml-1 shrink-0 invisible select-none" aria-hidden>
+            <span className="text-[12px]">↺</span>
+            <span className="text-[10px]">▼</span>
+          </div>
         </div>
 
         {weeks.map((week, wi) => {
@@ -448,7 +454,7 @@ export default function PlanView({
                     blockId={activeBlock.id}
                     weekId={week.id}
                     isToday={isCurrentWeek && selectedSession.day === todayDay}
-                    uid={uid}
+                    stravaToken={stravaToken}
                     sessionDate={getSessionDate(week.startDate, selectedSession.day)}
                     onToggle={onToggleSession}
                     onLogActual={onLogActual}

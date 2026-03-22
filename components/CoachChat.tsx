@@ -274,7 +274,7 @@ export default function CoachChat({ weeks, coachHistory, progressContext, onAppl
           <p className="text-sm text-stone-500 leading-relaxed">
             Tell me what&rsquo;s going on with training — or use a shortcut:
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2 overflow-x-auto pb-0.5">
             {INCIDENT_SHORTCUTS.map(({ label, icon }) => (
               <button
                 key={label}

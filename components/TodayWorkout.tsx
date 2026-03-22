@@ -6,7 +6,7 @@ interface Props {
   session: Session | null;
   blockId: string | null;
   weekId: string | null;
-  uid?: string;
+  stravaToken?: string;
   onToggle?: (blockId: string, weekId: string, sessionId: string, current: boolean) => void;
   onLogActual?: (blockId: string, weekId: string, sessionId: string, actual: Actual) => void;
 }
@@ -26,7 +26,7 @@ const WOD_FORMAT: Record<string, string> = {
   stations: "Stations",
 };
 
-export default function TodayWorkout({ session, blockId, weekId, uid, onToggle, onLogActual }: Props) {
+export default function TodayWorkout({ session, blockId, weekId, stravaToken, onToggle, onLogActual }: Props) {
   const [logText, setLogText] = useState("");
   const [parsed, setParsed] = useState<{ summary: string; actual: Actual } | null>(null);
   const [parsing, setParsing] = useState(false);
@@ -39,17 +39,17 @@ export default function TodayWorkout({ session, blockId, weekId, uid, onToggle, 
   const isRun = session?.category === "Run";
 
   useEffect(() => {
-    if (!isRun || !uid || session?.completed) return;
+    if (!isRun || !stravaToken || session?.completed) return;
     setStravaActivity(null);
     fetch("/api/strava/activities", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ uid, after: todayISO, before: todayISO }),
+      body: JSON.stringify({ accessToken: stravaToken, after: todayISO, before: todayISO }),
     })
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data?.activities?.length) setStravaActivity(data.activities[0]); })
       .catch(() => {});
-  }, [isRun, uid, todayISO, session?.id, session?.completed]);
+  }, [isRun, stravaToken, todayISO, session?.id, session?.completed]);
 
   const handleStravaImport = () => {
     if (!stravaActivity) return;

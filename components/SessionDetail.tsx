@@ -9,7 +9,7 @@ interface Props {
   blockId: string;
   weekId: string;
   isToday?: boolean;
-  uid?: string;
+  stravaToken?: string;
   sessionDate?: string;
   onToggle: (blockId: string, weekId: string, sessionId: string, current: boolean) => void;
   onLogActual: (blockId: string, weekId: string, sessionId: string, actual: Actual) => void;
@@ -27,7 +27,7 @@ function prescLine(parts: (string | number | null | undefined)[]): string {
   return parts.filter(Boolean).join("  ·  ");
 }
 
-export default function SessionDetail({ session, blockId, weekId, isToday, uid, sessionDate, onToggle, onLogActual, onEditPrescription }: Props) {
+export default function SessionDetail({ session, blockId, weekId, isToday, stravaToken, sessionDate, onToggle, onLogActual, onEditPrescription }: Props) {
   const [editOpen, setEditOpen] = useState(false);
   const [logText, setLogText] = useState("");
   const [parsed, setParsed] = useState<{ summary: string; actual: Actual } | null>(null);
@@ -41,17 +41,17 @@ export default function SessionDetail({ session, blockId, weekId, isToday, uid, 
   const isRest = session.category === "Rest";
 
   useEffect(() => {
-    if (!isRun || !uid || !sessionDate || session.completed) return;
+    if (!isRun || !stravaToken || !sessionDate || session.completed) return;
     setStravaActivity(null);
     fetch("/api/strava/activities", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ uid, after: sessionDate, before: sessionDate }),
+      body: JSON.stringify({ accessToken: stravaToken, after: sessionDate, before: sessionDate }),
     })
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data?.activities?.length) setStravaActivity(data.activities[0]); })
       .catch(() => {});
-  }, [isRun, uid, sessionDate, session.id, session.completed]);
+  }, [isRun, stravaToken, sessionDate, session.id, session.completed]);
 
   const runP = isRun ? (session.prescription as RunPrescription) : null;
   const strengthP = isStrength ? (session.prescription as StrengthPrescription) : null;

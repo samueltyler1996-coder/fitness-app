@@ -12,13 +12,13 @@ interface Props {
   todayDay: Day;
   goal: string;
   eventDate: string;
-  uid?: string;
+  stravaToken?: string;
   onToggleSession: (blockId: string, weekId: string, sessionId: string, current: boolean) => void;
   onLogActual: (blockId: string, weekId: string, sessionId: string, actual: Actual) => void;
 }
 
 export default function TodayView({
-  activeBlock, weeks, currentWeek, todaySession, todayDay, goal, eventDate, uid,
+  activeBlock, weeks, currentWeek, todaySession, todayDay, goal, eventDate, stravaToken,
   onToggleSession, onLogActual,
 }: Props) {
   const insights = computeInsights(weeks, 4);
@@ -30,7 +30,7 @@ export default function TodayView({
         session={todaySession}
         blockId={activeBlock?.id ?? null}
         weekId={currentWeek?.id ?? null}
-        uid={uid}
+        stravaToken={stravaToken}
         onToggle={onToggleSession}
         onLogActual={onLogActual}
       />
