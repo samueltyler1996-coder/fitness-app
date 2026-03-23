@@ -259,7 +259,9 @@ IMPORTANT: Respond with valid JSON only.
     const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
     if (!cleaned.startsWith("{")) return { summary: cleaned, changes: [] };
     const json = JSON.parse(cleaned);
-    return { summary: json.summary ?? "", changes: json.changes ?? [] };
+    // Strip any code blocks Gemini may have embedded in the summary
+    const summary = (json.summary ?? "").replace(/```[\s\S]*?```/g, "").trim();
+    return { summary, changes: json.changes ?? [] };
   } catch (err) {
     console.error("Telegram AI error:", err);
     return { summary: "Sorry, I ran into an issue. Try again in a moment.", changes: [] };
