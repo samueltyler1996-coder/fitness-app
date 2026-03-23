@@ -57,11 +57,11 @@ export async function POST(req: NextRequest) {
 
   const pending = userData.pendingTelegramChanges ?? null;
   if (pending) {
-    const reply = text.toLowerCase();
+    const reply = text.toLowerCase().trim();
     if (reply === "yes" || reply === "y") {
       await applyPendingChanges(uid, pending);
       await adminDb.doc(`users/${uid}`).update({ pendingTelegramChanges: FieldValue.delete() });
-      await sendMessage(chatId, `✓ Changes applied. ${pending.summary}`);
+      await sendMessage(chatId, `✓ Done! ${pending.summary}`);
       return NextResponse.json({ status: "ok" });
     }
     if (reply === "no" || reply === "n") {
@@ -69,8 +69,7 @@ export async function POST(req: NextRequest) {
       await sendMessage(chatId, "Got it — no changes made.");
       return NextResponse.json({ status: "ok" });
     }
-    await sendMessage(chatId, `You have pending changes: ${pending.summary}\n\nReply YES to apply or NO to cancel first.`);
-    return NextResponse.json({ status: "ok" });
+    // Not YES/NO — fall through to coaching flow, pending will be replaced or cleared
   }
 
   // ── Coaching flow ─────────────────────────────────────────────────────────
@@ -110,6 +109,7 @@ export async function POST(req: NextRequest) {
   ].slice(-20);
 
   if (aiResponse.changes.length > 0) {
+    const changesList = formatChanges(aiResponse.changes, weeks);
     await adminDb.doc(`users/${uid}`).update({
       telegramConversation: finalConversation,
       pendingTelegramChanges: {
@@ -119,9 +119,13 @@ export async function POST(req: NextRequest) {
         blockId: activeBlock.id,
       },
     });
-    await sendMessage(chatId, `${aiResponse.summary}\n\nReply YES to apply or NO to cancel.`);
+    await sendMessage(chatId, `${aiResponse.summary}\n\n${changesList}\n\nReply YES to apply or NO to cancel.`);
   } else {
-    await adminDb.doc(`users/${uid}`).update({ telegramConversation: finalConversation });
+    // No changes — clear any pending and continue conversationally
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const update: Record<string, any> = { telegramConversation: finalConversation };
+    if (pending) update.pendingTelegramChanges = FieldValue.delete();
+    await adminDb.doc(`users/${uid}`).update(update);
     await sendMessage(chatId, aiResponse.summary);
   }
 
@@ -129,6 +133,29 @@ export async function POST(req: NextRequest) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function describeSession(category: string | null, prescription: Record<string, unknown> | null): string {
+  if (!category || category === "Rest") return "Rest";
+  if (category === "Run") {
+    const type = (prescription?.type as string) ?? "run";
+    const km = prescription?.distanceKm ? ` ${prescription.distanceKm}km` : "";
+    return `${type} run${km}`;
+  }
+  if (category === "Strength") {
+    const focus = prescription?.focus as string;
+    return focus ? `${focus} strength` : "Strength";
+  }
+  return category;
+}
+
+function formatChanges(changes: SessionChange[], weeks: TrainingWeek[]): string {
+  return changes.map(change => {
+    const original = weeks.flatMap(w => w.sessions).find(s => s.id === change.sessionId);
+    const from = describeSession(original?.category ?? null, original?.prescription as Record<string, unknown> ?? null);
+    const to = describeSession(change.category, change.prescription as Record<string, unknown>);
+    return `• ${change.day}: ${from} → ${to}`;
+  }).join("\n");
+}
 
 function getDayOffset(weekStartDate: string, day: string): number {
   const start = new Date(weekStartDate + "T12:00:00");

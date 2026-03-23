@@ -58,11 +58,11 @@ export async function POST(req: NextRequest) {
 
   const pending = userData.pendingWhatsappChanges ?? null;
   if (pending) {
-    const reply = text.toLowerCase();
+    const reply = text.toLowerCase().trim();
     if (reply === "yes" || reply === "y") {
       await applyPendingChanges(uid, pending);
       await adminDb.doc(`users/${uid}`).update({ pendingWhatsappChanges: FieldValue.delete() });
-      await sendMessage(phone, `✓ Changes applied. ${pending.summary}`);
+      await sendMessage(phone, `✓ Done! ${pending.summary}`);
       return NextResponse.json({ status: "ok" });
     }
     if (reply === "no" || reply === "n") {
@@ -70,9 +70,7 @@ export async function POST(req: NextRequest) {
       await sendMessage(phone, "Got it — no changes made.");
       return NextResponse.json({ status: "ok" });
     }
-    // Not YES/NO: remind them before accepting a new message
-    await sendMessage(phone, `You have pending changes: ${pending.summary}\n\nReply YES to apply or NO to cancel first.`);
-    return NextResponse.json({ status: "ok" });
+    // Not YES/NO — fall through to coaching flow, pending will be replaced or cleared
   }
 
   // ── Coaching flow ─────────────────────────────────────────────────────────
@@ -118,6 +116,7 @@ export async function POST(req: NextRequest) {
   ].slice(-20);
 
   if (aiResponse.changes.length > 0) {
+    const changesList = formatChanges(aiResponse.changes, weeks);
     await adminDb.doc(`users/${uid}`).update({
       whatsappConversation: finalConversation,
       pendingWhatsappChanges: {
@@ -127,9 +126,12 @@ export async function POST(req: NextRequest) {
         blockId: activeBlock.id,
       },
     });
-    await sendMessage(phone, `${aiResponse.summary}\n\nReply YES to apply or NO to cancel.`);
+    await sendMessage(phone, `${aiResponse.summary}\n\n${changesList}\n\nReply YES to apply or NO to cancel.`);
   } else {
-    await adminDb.doc(`users/${uid}`).update({ whatsappConversation: finalConversation });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const update: Record<string, any> = { whatsappConversation: finalConversation };
+    if (pending) update.pendingWhatsappChanges = FieldValue.delete();
+    await adminDb.doc(`users/${uid}`).update(update);
     await sendMessage(phone, aiResponse.summary);
   }
 
@@ -149,6 +151,29 @@ async function sendMessage(to: string, body: string) {
     body: JSON.stringify({ messaging_product: "whatsapp", to, type: "text", text: { body } }),
   });
   if (!res.ok) console.error("WhatsApp send error:", await res.text());
+}
+
+function describeSession(category: string | null, prescription: Record<string, unknown> | null): string {
+  if (!category || category === "Rest") return "Rest";
+  if (category === "Run") {
+    const type = (prescription?.type as string) ?? "run";
+    const km = prescription?.distanceKm ? ` ${prescription.distanceKm}km` : "";
+    return `${type} run${km}`;
+  }
+  if (category === "Strength") {
+    const focus = prescription?.focus as string;
+    return focus ? `${focus} strength` : "Strength";
+  }
+  return category;
+}
+
+function formatChanges(changes: SessionChange[], weeks: TrainingWeek[]): string {
+  return changes.map(change => {
+    const original = weeks.flatMap(w => w.sessions).find(s => s.id === change.sessionId);
+    const from = describeSession(original?.category ?? null, original?.prescription as Record<string, unknown> ?? null);
+    const to = describeSession(change.category, change.prescription as Record<string, unknown>);
+    return `• ${change.day}: ${from} → ${to}`;
+  }).join("\n");
 }
 
 function getDayOffset(weekStartDate: string, day: string): number {
