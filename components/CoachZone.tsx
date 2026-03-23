@@ -15,8 +15,10 @@ interface Props {
   progressContext: string;
   userName: string;
   telegramChatId: string;
+  whatsappPhone: string;
   onApplyChanges: (changes: SessionChange[], meta: { firstMessage: string; summary: string; incidentType?: IncidentType }) => Promise<void>;
   onSaveTelegramChatId: (chatId: string) => Promise<void>;
+  onSaveWhatsappPhone: (phone: string) => Promise<void>;
 }
 
 function daysUntil(dateStr: string): number | null {
@@ -44,11 +46,14 @@ function sessionLabel(session: Session | null): string {
 
 export default function CoachZone({
   activeBlock, weeks, todaySession, eventDate, coachHistory, progressContext, userName,
-  telegramChatId, onApplyChanges, onSaveTelegramChatId,
+  telegramChatId, whatsappPhone, onApplyChanges, onSaveTelegramChatId, onSaveWhatsappPhone,
 }: Props) {
-  const [phoneInput, setPhoneInput] = useState("");
-  const [savingPhone, setSavingPhone] = useState(false);
-  const [showPhoneForm, setShowPhoneForm] = useState(false);
+  const [showTelegramForm, setShowTelegramForm] = useState(false);
+  const [telegramInput, setTelegramInput] = useState("");
+  const [savingTelegram, setSavingTelegram] = useState(false);
+  const [showWhatsAppForm, setShowWhatsAppForm] = useState(false);
+  const [whatsAppInput, setWhatsAppInput] = useState("");
+  const [savingWhatsApp, setSavingWhatsApp] = useState(false);
   const daysToRace = daysUntil(eventDate);
   const label = sessionLabel(todaySession);
   const isDone = todaySession?.completed ?? false;
@@ -119,66 +124,87 @@ export default function CoachZone({
         )}
       </div>
 
-      {/* Telegram connect */}
-      <div className="px-5 pt-2 pb-1 border-t border-stone-200/60">
+      {/* Messaging connections */}
+      <div className="px-5 pt-2 pb-1 border-t border-stone-200/60 flex flex-col gap-2">
+
+        {/* Telegram */}
         {telegramChatId ? (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <p className="text-[10px] tracking-[0.12em] uppercase text-stone-400">
-                Telegram connected
-              </p>
+              <p className="text-[10px] tracking-[0.12em] uppercase text-stone-400">Telegram</p>
             </div>
-            <button
-              onClick={async () => { await onSaveTelegramChatId(""); }}
-              className="text-[10px] tracking-[0.12em] uppercase text-stone-300 hover:text-stone-500 transition-colors"
-            >
+            <button onClick={async () => { await onSaveTelegramChatId(""); }}
+              className="text-[10px] tracking-[0.12em] uppercase text-stone-300 hover:text-stone-500 transition-colors">
               Disconnect
             </button>
           </div>
-        ) : showPhoneForm ? (
-          <div className="flex flex-col gap-2">
-            <p className="text-[10px] text-stone-400 leading-relaxed">
-              Message your bot on Telegram first — it will reply with your chat ID.
-            </p>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="Chat ID (e.g. 123456789)"
-                value={phoneInput}
-                onChange={e => setPhoneInput(e.target.value.replace(/[^0-9]/g, ""))}
-                className="flex-1 text-[11px] bg-transparent border-b border-stone-300 pb-0.5 text-stone-700 placeholder:text-stone-300 outline-none"
-              />
-              <button
-                onClick={async () => {
-                  if (!phoneInput) return;
-                  setSavingPhone(true);
-                  await onSaveTelegramChatId(phoneInput);
-                  setPhoneInput("");
-                  setShowPhoneForm(false);
-                  setSavingPhone(false);
-                }}
-                disabled={savingPhone || !phoneInput}
-                className="text-[10px] tracking-[0.12em] uppercase text-stone-700 disabled:text-stone-300 transition-colors"
-              >
-                {savingPhone ? "Saving…" : "Save"}
-              </button>
-              <button
-                onClick={() => { setShowPhoneForm(false); setPhoneInput(""); }}
-                className="text-[10px] tracking-[0.12em] uppercase text-stone-300 hover:text-stone-500 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
+        ) : showTelegramForm ? (
+          <div className="flex items-center gap-2">
+            <input type="text" placeholder="Chat ID — message the bot first"
+              value={telegramInput}
+              onChange={e => setTelegramInput(e.target.value.replace(/[^0-9]/g, ""))}
+              className="flex-1 text-[11px] bg-transparent border-b border-stone-300 pb-0.5 text-stone-700 placeholder:text-stone-300 outline-none" />
+            <button onClick={async () => {
+                if (!telegramInput) return;
+                setSavingTelegram(true);
+                await onSaveTelegramChatId(telegramInput);
+                setTelegramInput(""); setShowTelegramForm(false); setSavingTelegram(false);
+              }} disabled={savingTelegram || !telegramInput}
+              className="text-[10px] tracking-[0.12em] uppercase text-stone-700 disabled:text-stone-300 transition-colors">
+              {savingTelegram ? "Saving…" : "Save"}
+            </button>
+            <button onClick={() => { setShowTelegramForm(false); setTelegramInput(""); }}
+              className="text-[10px] tracking-[0.12em] uppercase text-stone-300 hover:text-stone-500 transition-colors">
+              Cancel
+            </button>
           </div>
         ) : (
-          <button
-            onClick={() => setShowPhoneForm(true)}
-            className="text-[10px] tracking-[0.12em] uppercase text-stone-300 hover:text-stone-500 transition-colors"
-          >
+          <button onClick={() => setShowTelegramForm(true)}
+            className="text-[10px] tracking-[0.12em] uppercase text-stone-300 hover:text-stone-500 transition-colors">
             + Connect Telegram
           </button>
         )}
+
+        {/* WhatsApp */}
+        {whatsappPhone ? (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <p className="text-[10px] tracking-[0.12em] uppercase text-stone-400">WhatsApp</p>
+            </div>
+            <button onClick={async () => { await onSaveWhatsappPhone(""); }}
+              className="text-[10px] tracking-[0.12em] uppercase text-stone-300 hover:text-stone-500 transition-colors">
+              Disconnect
+            </button>
+          </div>
+        ) : showWhatsAppForm ? (
+          <div className="flex items-center gap-2">
+            <input type="tel" placeholder="e.g. 447911123456"
+              value={whatsAppInput}
+              onChange={e => setWhatsAppInput(e.target.value.replace(/[^0-9]/g, ""))}
+              className="flex-1 text-[11px] bg-transparent border-b border-stone-300 pb-0.5 text-stone-700 placeholder:text-stone-300 outline-none" />
+            <button onClick={async () => {
+                if (!whatsAppInput) return;
+                setSavingWhatsApp(true);
+                await onSaveWhatsappPhone(whatsAppInput);
+                setWhatsAppInput(""); setShowWhatsAppForm(false); setSavingWhatsApp(false);
+              }} disabled={savingWhatsApp || !whatsAppInput}
+              className="text-[10px] tracking-[0.12em] uppercase text-stone-700 disabled:text-stone-300 transition-colors">
+              {savingWhatsApp ? "Saving…" : "Save"}
+            </button>
+            <button onClick={() => { setShowWhatsAppForm(false); setWhatsAppInput(""); }}
+              className="text-[10px] tracking-[0.12em] uppercase text-stone-300 hover:text-stone-500 transition-colors">
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => setShowWhatsAppForm(true)}
+            className="text-[10px] tracking-[0.12em] uppercase text-stone-300 hover:text-stone-500 transition-colors">
+            + Connect WhatsApp
+          </button>
+        )}
+
       </div>
 
       {/* Sign out — tucked at bottom */}

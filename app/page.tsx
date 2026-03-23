@@ -35,6 +35,7 @@ export default function Home() {
   const [stravaAthleteInfo, setStravaAthleteInfo] = useState<string | null>(null);
   const [stravaAccessToken, setStravaAccessToken] = useState<string | null>(null);
   const [telegramChatId, setTelegramChatId] = useState("");
+  const [whatsappPhone, setWhatsappPhone] = useState("");
 
   const todayISO = new Date().toISOString().split("T")[0];
   const todayDate = new Date(todayISO);
@@ -170,6 +171,7 @@ export default function Home() {
           setGoal(data.currentGoal || "");
           setEventDate(data.eventDate || "");
           setTelegramChatId(data.telegramChatId || "");
+          setWhatsappPhone(data.whatsappPhone || "");
         }
 
         setUser(currentUser);
@@ -272,6 +274,12 @@ export default function Home() {
     if (!user) return;
     await setDoc(doc(db, "users", user.uid), { telegramChatId: chatId }, { merge: true });
     setTelegramChatId(chatId);
+  };
+
+  const handleSaveWhatsappPhone = async (phone: string) => {
+    if (!user) return;
+    await setDoc(doc(db, "users", user.uid), { whatsappPhone: phone }, { merge: true });
+    setWhatsappPhone(phone);
   };
 
   const handleQueueBlock = async (nextGoal: string, numWeeks: number) => {
@@ -535,8 +543,10 @@ export default function Home() {
           progressContext={progressContext}
           userName={user.displayName ?? user.email ?? ""}
           telegramChatId={telegramChatId}
+          whatsappPhone={whatsappPhone}
           onApplyChanges={applyChanges}
           onSaveTelegramChatId={handleSaveTelegramChatId}
+          onSaveWhatsappPhone={handleSaveWhatsappPhone}
         />
       </div>
 
