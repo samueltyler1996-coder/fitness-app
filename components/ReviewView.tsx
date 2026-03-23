@@ -1,6 +1,5 @@
 import { TrainingBlock, TrainingWeek } from "../lib/types";
 import { computeBlockMetrics, computeInsights } from "../lib/analytics";
-import InsightCard from "./InsightCard";
 
 interface Props {
   activeBlock: TrainingBlock | null;
@@ -9,10 +8,10 @@ interface Props {
 
 const CATS = ["Run", "Strength", "WOD"] as const;
 
-const CAT_DOT: Record<string, string> = {
-  Run: "bg-blue-400",
-  Strength: "bg-amber-400",
-  WOD: "bg-violet-400",
+const CAT_BAR: Record<string, string> = {
+  Run: "bg-stone-700",
+  Strength: "bg-stone-600",
+  WOD: "bg-stone-500",
 };
 
 function pct(rate: number) {
@@ -39,22 +38,19 @@ export default function ReviewView({ activeBlock, weeks }: Props) {
 
       {/* Block headline */}
       <div>
-        <p className="text-[10px] tracking-[0.15em] uppercase text-stone-400 mb-3">
-          {activeBlock.name}
-        </p>
-        <div className="flex gap-8 items-end">
+        <p className="text-[10px] tracking-[0.15em] uppercase text-stone-400 mb-2">{activeBlock.name}</p>
+        <div className="flex items-end gap-6 mb-3">
           <div>
-            <p className="text-5xl font-light text-stone-800">{pct(metrics.completionRate)}</p>
-            <p className="text-xs text-stone-400 mt-1">overall completion</p>
-          </div>
-          <div>
-            <p className="text-2xl font-light text-stone-800">
-              {metrics.completedSessions}
-              <span className="text-stone-300">/{metrics.totalSessions}</span>
-            </p>
-            <p className="text-xs text-stone-400 mt-1">sessions done</p>
+            <p className="font-display font-black text-stone-900 leading-none" style={{ fontSize: "52px" }}>{pct(metrics.completionRate)}</p>
+            <p className="text-[11px] text-stone-400 mt-1">{metrics.completedSessions} of {metrics.totalSessions} sessions done</p>
           </div>
         </div>
+        {metrics.completionRate >= 0.8 && (
+          <p className="text-[12px] text-stone-500 pl-3 border-l-2 border-stone-300">On track. Keep the consistency going.</p>
+        )}
+        {metrics.completionRate < 0.6 && metrics.totalSessions > 0 && (
+          <p className="text-[12px] text-stone-500 pl-3 border-l-2 border-stone-300">Completion is low — worth reviewing what's getting skipped.</p>
+        )}
       </div>
 
       {/* Week-by-week grid */}
@@ -102,7 +98,7 @@ export default function ReviewView({ activeBlock, weeks }: Props) {
                 </div>
                 <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all ${CAT_DOT[cat]}`}
+                    className={`h-full rounded-full transition-all ${CAT_BAR[cat]}`}
                     style={{ width: pct(s.rate) }}
                   />
                 </div>
@@ -146,13 +142,12 @@ export default function ReviewView({ activeBlock, weeks }: Props) {
 
       {/* Patterns / insights */}
       {insights.length > 0 && (
-        <div>
-          <p className="text-[10px] tracking-[0.15em] uppercase text-stone-400 mb-3">Patterns</p>
-          <div className="flex flex-col gap-2">
-            {insights.map((signal, i) => (
-              <InsightCard key={i} signal={signal} />
-            ))}
-          </div>
+        <div className="flex flex-col gap-2">
+          {insights.map((signal, i) => (
+            <p key={i} className="text-[12px] text-stone-500 leading-relaxed pl-3 border-l-2 border-stone-200">
+              {signal.message}
+            </p>
+          ))}
         </div>
       )}
 

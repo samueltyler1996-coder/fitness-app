@@ -40,14 +40,8 @@ function prescriptionLabel(category: Category, prescription: Prescription): stri
   return category;
 }
 
-function categoryDot(category: Category) {
-  return category === "Run"
-    ? "bg-blue-400"
-    : category === "Strength"
-    ? "bg-amber-400"
-    : category === "WOD"
-    ? "bg-violet-400"
-    : "bg-stone-300";
+function categoryChar(category: Category): string {
+  return category === "Run" ? "R" : category === "Strength" ? "S" : category === "WOD" ? "W" : "";
 }
 
 // Detect messages that are likely incidents (illness/injury/missed/fatigue)
@@ -63,10 +57,10 @@ function looksLikeIncident(text: string): boolean {
   );
 }
 
-const INCIDENT_SHORTCUTS: { label: string; icon: string }[] = [
-  { label: "I'm ill this week", icon: "🤒" },
-  { label: "I have an injury", icon: "🩹" },
-  { label: "I missed a session", icon: "✗" },
+const INCIDENT_SHORTCUTS: { label: string; text: string }[] = [
+  { label: "Adjust for fatigue", text: "I'm feeling fatigued this week — can you adjust the load?" },
+  { label: "Dealing with an injury", text: "I have an injury I need to work around" },
+  { label: "Missed a session", text: "I missed a session" },
 ];
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -271,24 +265,22 @@ export default function CoachChat({ weeks, coachHistory, progressContext, onAppl
       {/* Empty state: prompt + shortcuts */}
       {!hasConversation && (
         <div className="flex flex-col gap-3">
-          <p className="text-sm text-stone-500 leading-relaxed">
-            Tell me what&rsquo;s going on with training — or use a shortcut:
-          </p>
-          <div className="flex gap-2 overflow-x-auto pb-0.5">
-            {INCIDENT_SHORTCUTS.map(({ label, icon }) => (
+          <p className="text-[13px] font-medium text-stone-700 mb-0.5">What's going on?</p>
+          <p className="text-[12px] text-stone-400 mb-1">Common situations:</p>
+          <div className="flex flex-col gap-1.5">
+            {INCIDENT_SHORTCUTS.map(({ label, text }) => (
               <button
                 key={label}
                 onClick={() => {
-                  if (label === "I missed a session") {
+                  if (label === "Missed a session") {
                     setShowDayPicker(v => !v);
                   } else {
-                    handleSend(label);
+                    handleSend(text);
                   }
                 }}
-                className="flex items-center gap-1.5 text-[11px] text-stone-500 border border-stone-200 rounded-full px-3 py-1.5 hover:border-stone-400 hover:text-stone-700 transition-colors"
+                className="text-left text-[13px] text-stone-600 border border-stone-200 rounded-lg px-4 py-3 hover:border-stone-400 hover:text-stone-900 hover:bg-stone-50 transition-colors"
               >
-                <span>{icon}</span>
-                <span>{label}</span>
+                {label}
               </button>
             ))}
           </div>
@@ -302,7 +294,7 @@ export default function CoachChat({ weeks, coachHistory, progressContext, onAppl
                     {eligible.map(day => (
                       <button
                         key={day}
-                        onClick={() => { setShowDayPicker(false); handleSend(`I missed my ${day} session`); }}
+                        onClick={() => { setShowDayPicker(false); handleSend(`I missed my ${day} session — what should I do?`); }}
                         className="text-[11px] text-stone-500 border border-stone-200 rounded-full px-3 py-1.5 hover:border-stone-400 hover:text-stone-700 transition-colors"
                       >
                         {DAY_SHORT[DAY_NAMES.indexOf(day)]}
@@ -400,7 +392,9 @@ export default function CoachChat({ weeks, coachHistory, progressContext, onAppl
                                       <span className="text-stone-400">{fromLabel}</span>
                                       <span className="text-stone-200">→</span>
                                       <span className="flex items-center gap-1">
-                                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${categoryDot(change.category)}`} />
+                                        {categoryChar(change.category) && (
+                                          <span className="text-[9px] font-semibold text-stone-500 w-3 shrink-0">{categoryChar(change.category)}</span>
+                                        )}
                                         <span className="text-stone-700">{toLabel}</span>
                                       </span>
                                     </div>
@@ -433,7 +427,7 @@ export default function CoachChat({ weeks, coachHistory, progressContext, onAppl
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === "Enter" && handleSend()}
-          placeholder={hasConversation ? "Reply…" : "e.g. I'm ill, I tweaked my ankle, I missed Tuesday…"}
+          placeholder={hasConversation ? "Reply…" : "Tell me what's happening…"}
           className="flex-1 bg-stone-50 border border-stone-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-stone-400 transition-colors placeholder:text-stone-300"
         />
         <button

@@ -7,14 +7,16 @@ import {
 } from "firebase/firestore";
 import { signInWithPopup, signOut, GoogleAuthProvider, onAuthStateChanged, User } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
-import { TrainingBlock, TrainingWeek, Session, Category, Day, Actual, Prescription, SessionChange, CoachSessionChange, CoachSessionLog, IncidentType } from "../lib/types";
+import {
+  TrainingBlock, TrainingWeek, Session, Category, Day, Actual, Prescription,
+  SessionChange, CoachSessionChange, CoachSessionLog, IncidentType,
+} from "../lib/types";
 import { computeBlockSummary, formatProgressContext } from "../lib/analytics";
-import TodayView from "../components/TodayView";
-import PlanView from "../components/PlanView";
-import ReviewView from "../components/ReviewView";
-import ProgressView from "../components/ProgressView";
-import CoachChat from "../components/CoachChat";
-import TrainingWeeks from "../components/TrainingWeeks";
+import BottomNav, { Zone } from "../components/BottomNav";
+import NowZone from "../components/NowZone";
+import BlockZone from "../components/BlockZone";
+import CoachZone from "../components/CoachZone";
+import ProgressZone from "../components/ProgressZone";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -26,11 +28,10 @@ export default function Home() {
   const [queuedBlock, setQueuedBlock] = useState<TrainingBlock | null>(null);
   const [completedBlocks, setCompletedBlocks] = useState<TrainingBlock[]>([]);
   const [weeks, setWeeks] = useState<TrainingWeek[]>([]);
-  const [expandedWeek, setExpandedWeek] = useState<string | null>(null);
   const [coachHistory, setCoachHistory] = useState<CoachSessionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [view, setView] = useState<"today" | "plan" | "review" | "progress">("today");
+  const [zone, setZone] = useState<Zone>("now");
   const [stravaAthleteInfo, setStravaAthleteInfo] = useState<string | null>(null);
   const [stravaAccessToken, setStravaAccessToken] = useState<string | null>(null);
 
@@ -58,7 +59,6 @@ export default function Home() {
 
     const active = allBlocks.find(b => b.status === "active") ?? null;
     const queued = allBlocks.find(b => b.status === "queued") ?? null;
-    // Most-recent completed block first
     const completed = allBlocks.filter(b => b.status === "completed").reverse();
 
     setQueuedBlock(queued);
@@ -67,19 +67,15 @@ export default function Home() {
     if (!active) {
       setActiveBlock(null);
       setWeeks([]);
-      setExpandedWeek(null);
       return;
     }
 
     setActiveBlock(active);
 
     const weeksRef = collection(db, "users", uid, "trainingBlocks", active.id, "trainingWeeks");
-    const weeksQuery = query(weeksRef, orderBy("startDate", "asc"));
-    const weeksSnapshot = await getDocs(weeksQuery);
+    const weeksSnapshot = await getDocs(query(weeksRef, orderBy("startDate", "asc")));
 
     const weeksData: TrainingWeek[] = [];
-    let currentWeekId: string | null = null;
-    const today = new Date(new Date().toISOString().split("T")[0]);
 
     for (const weekDoc of weeksSnapshot.docs) {
       const sessionsRef = collection(db, "users", uid, "trainingBlocks", active.id, "trainingWeeks", weekDoc.id, "sessions");
@@ -100,16 +96,10 @@ export default function Home() {
         .map(s => ({ id: s.id, ...s.data() } as Session))
         .sort((a, b) => getOffset(a.day) - getOffset(b.day));
 
-      const week: TrainingWeek = { id: weekDoc.id, ...weekDoc.data(), sessions } as TrainingWeek;
-      weeksData.push(week);
-
-      const start = new Date(week.startDate);
-      const end = new Date(week.endDate);
-      if (today >= start && today <= end) currentWeekId = week.id;
+      weeksData.push({ id: weekDoc.id, ...weekDoc.data(), sessions } as TrainingWeek);
     }
 
     setWeeks(weeksData);
-    if (currentWeekId) setExpandedWeek(currentWeekId);
 
     const historyQuery = query(
       collection(db, "users", uid, "coachSessions"),
@@ -120,14 +110,11 @@ export default function Home() {
     setCoachHistory(historySnap.docs.map(d => ({ id: d.id, ...d.data() } as CoachSessionLog)));
   }, []);
 
-  // Handle Strava OAuth callback params and load existing Strava connection
+  // Strava OAuth callback + load existing connection
   useEffect(() => {
     if (!user) return;
-
     const params = new URLSearchParams(window.location.search);
-    const stravaParam = params.get("strava");
-
-    if (stravaParam === "connected") {
+    if (params.get("strava") === "connected") {
       const at = params.get("at") ?? "";
       const stravaRef = doc(db, "users", user.uid, "integrations", "strava");
       setDoc(stravaRef, {
@@ -190,14 +177,13 @@ export default function Home() {
       }
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, [fetchBlockData]);
 
   const handleCreateBlock = async () => {
     if (!user) return;
     setCreating(true);
-
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let generatedPlan: any = null;
     try {
       const res = await fetch("/api/generate-plan", {
@@ -216,7 +202,6 @@ export default function Home() {
     const activeQuery = query(blocksRef, where("status", "==", "active"));
     const activeSnapshot = await getDocs(activeQuery);
     for (const docSnap of activeSnapshot.docs) {
-      // Compute snapshot summary from current weeks state before marking completed
       const completedAt = new Date().toISOString().split("T")[0];
       const summary = computeBlockSummary(weeks, completedAt);
       await updateDoc(docSnap.ref, { status: "completed", endedAt: serverTimestamp(), summary });
@@ -229,7 +214,7 @@ export default function Home() {
     week1End.setDate(today.getDate() + daysUntilSunday);
 
     const weekRanges: { start: Date; end: Date }[] = [{ start: new Date(today), end: new Date(week1End) }];
-    let nextMonday = new Date(week1End);
+    const nextMonday = new Date(week1End);
     nextMonday.setDate(week1End.getDate() + 1);
     for (let i = 1; i < 6; i++) {
       const weekStart = new Date(nextMonday);
@@ -244,9 +229,7 @@ export default function Home() {
     const name = primaryGoal === "Maintenance" ? "Maintenance Block" : `${primaryGoal} Block`;
 
     const blockDocRef = await addDoc(blocksRef, {
-      name,
-      primaryGoal,
-      secondaryGoal: null,
+      name, primaryGoal, secondaryGoal: null,
       startDate: today.toISOString().split("T")[0],
       endDate: blockEndDate.toISOString().split("T")[0],
       status: "active",
@@ -254,38 +237,21 @@ export default function Home() {
     });
 
     const blockId = blockDocRef.id;
-
     for (let weekIndex = 0; weekIndex < weekRanges.length; weekIndex++) {
       const { start, end } = weekRanges[weekIndex];
-
       const weekRef = await addDoc(
         collection(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks"),
-        {
-          startDate: start.toISOString().split("T")[0],
-          endDate: end.toISOString().split("T")[0],
-          createdAt: serverTimestamp(),
-        }
+        { startDate: start.toISOString().split("T")[0], endDate: end.toISOString().split("T")[0], createdAt: serverTimestamp() }
       );
-
       const weekId = weekRef.id;
       const weekPlan = generatedPlan.weeks?.[weekIndex];
       const current = new Date(start);
-
       while (current <= end) {
         const day = DAY_NAMES[current.getDay()] as Day;
         const sessionPlan = weekPlan?.sessions?.find((s: any) => s.day === day);
         await addDoc(
           collection(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions"),
-          {
-            day,
-            category: sessionPlan?.category ?? null,
-            completed: false,
-            prescription: sessionPlan?.prescription ?? {},
-            actual: {},
-            aiGenerated: true,
-            manuallyModified: false,
-            createdAt: serverTimestamp(),
-          }
+          { day, category: sessionPlan?.category ?? null, completed: false, prescription: sessionPlan?.prescription ?? {}, actual: {}, aiGenerated: true, manuallyModified: false, createdAt: serverTimestamp() }
         );
         current.setDate(current.getDate() + 1);
       }
@@ -297,30 +263,22 @@ export default function Home() {
 
   const handleSave = async () => {
     if (!user) return;
-    const userRef = doc(db, "users", user.uid);
-    await setDoc(userRef, { currentGoal: goal, eventDate }, { merge: true });
+    await setDoc(doc(db, "users", user.uid), { currentGoal: goal, eventDate }, { merge: true });
   };
 
   const handleQueueBlock = async (nextGoal: string, numWeeks: number) => {
     if (!user || !activeBlock || queuedBlock) return;
-
-    // Start the day after the active block ends
     const activeEnd = new Date(activeBlock.endDate + "T12:00:00");
     const start = new Date(activeEnd);
     start.setDate(start.getDate() + 1);
     const end = new Date(start);
     end.setDate(end.getDate() + (numWeeks * 7) - 1);
-
-    const blocksRef = collection(db, "users", user.uid, "trainingBlocks");
-    await addDoc(blocksRef, {
-      name: `${nextGoal} Block`,
-      primaryGoal: nextGoal,
+    await addDoc(collection(db, "users", user.uid, "trainingBlocks"), {
+      name: `${nextGoal} Block`, primaryGoal: nextGoal,
       startDate: start.toISOString().split("T")[0],
       endDate: end.toISOString().split("T")[0],
-      status: "queued",
-      createdAt: serverTimestamp(),
+      status: "queued", createdAt: serverTimestamp(),
     });
-
     await fetchBlockData(user.uid);
   };
 
@@ -333,15 +291,12 @@ export default function Home() {
   const handleActivateQueuedBlock = async () => {
     if (!user || !queuedBlock) return;
     setCreating(true);
-
-    // Generate sessions using the queued block's goal
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let generatedPlan: any = null;
     try {
-      // Derive week count from queued block's date range for the API call
-      const qBlockStart = new Date(queuedBlock.startDate + "T12:00:00");
-      const qBlockEnd = new Date(queuedBlock.endDate + "T12:00:00");
-      const qBlockWeeks = Math.round((qBlockEnd.getTime() - qBlockStart.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
-
+      const qStart = new Date(queuedBlock.startDate + "T12:00:00");
+      const qEnd = new Date(queuedBlock.endDate + "T12:00:00");
+      const qBlockWeeks = Math.round((qEnd.getTime() - qStart.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
       const res = await fetch("/api/generate-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -354,20 +309,15 @@ export default function Home() {
       return;
     }
 
-    // Complete the current active block with a summary snapshot
     const blocksRef = collection(db, "users", user.uid, "trainingBlocks");
     const activeSnapshot = await getDocs(query(blocksRef, where("status", "==", "active")));
     for (const docSnap of activeSnapshot.docs) {
-      const completedAt = new Date().toISOString().split("T")[0];
-      const summary = computeBlockSummary(weeks, completedAt);
+      const summary = computeBlockSummary(weeks, new Date().toISOString().split("T")[0]);
       await updateDoc(docSnap.ref, { status: "completed", endedAt: serverTimestamp(), summary });
     }
 
-    // Promote queued → active
-    const queuedRef = doc(db, "users", user.uid, "trainingBlocks", queuedBlock.id);
-    await updateDoc(queuedRef, { status: "active" });
+    await updateDoc(doc(db, "users", user.uid, "trainingBlocks", queuedBlock.id), { status: "active" });
 
-    // Derive week count from queued block's stored date range
     const blockId = queuedBlock.id;
     const qStart = new Date(queuedBlock.startDate + "T12:00:00");
     const qEnd = new Date(queuedBlock.endDate + "T12:00:00");
@@ -378,39 +328,22 @@ export default function Home() {
       const weekStart = new Date(current);
       const weekEnd = new Date(current);
       weekEnd.setDate(weekEnd.getDate() + 6);
-
       const weekRef = await addDoc(
         collection(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks"),
-        {
-          startDate: weekStart.toISOString().split("T")[0],
-          endDate: weekEnd.toISOString().split("T")[0],
-          createdAt: serverTimestamp(),
-        }
+        { startDate: weekStart.toISOString().split("T")[0], endDate: weekEnd.toISOString().split("T")[0], createdAt: serverTimestamp() }
       );
-
       const weekId = weekRef.id;
       const weekPlan = generatedPlan.weeks?.[weekIndex];
       const day = new Date(weekStart);
-
       while (day <= weekEnd) {
         const dayName = DAY_NAMES[day.getDay()] as Day;
         const sessionPlan = weekPlan?.sessions?.find((s: any) => s.day === dayName);
         await addDoc(
           collection(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions"),
-          {
-            day: dayName,
-            category: sessionPlan?.category ?? null,
-            completed: false,
-            prescription: sessionPlan?.prescription ?? {},
-            actual: {},
-            aiGenerated: true,
-            manuallyModified: false,
-            createdAt: serverTimestamp(),
-          }
+          { day: dayName, category: sessionPlan?.category ?? null, completed: false, prescription: sessionPlan?.prescription ?? {}, actual: {}, aiGenerated: true, manuallyModified: false, createdAt: serverTimestamp() }
         );
         day.setDate(day.getDate() + 1);
       }
-
       current.setDate(current.getDate() + 7);
     }
 
@@ -420,8 +353,7 @@ export default function Home() {
 
   const toggleSession = async (blockId: string, weekId: string, sessionId: string, currentValue: boolean) => {
     if (!user) return;
-    const sessionRef = doc(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions", sessionId);
-    await updateDoc(sessionRef, { completed: !currentValue });
+    await updateDoc(doc(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions", sessionId), { completed: !currentValue });
     setWeeks(prev => prev.map(week =>
       week.id === weekId
         ? { ...week, sessions: week.sessions.map(s => s.id === sessionId ? { ...s, completed: !currentValue } : s) }
@@ -431,49 +363,33 @@ export default function Home() {
 
   const applyChanges = async (changes: SessionChange[], meta: { firstMessage: string; summary: string; incidentType?: IncidentType }) => {
     if (!user || !activeBlock) return;
-
     const batch = writeBatch(db);
-
     const logChanges: CoachSessionChange[] = changes.map(change => {
       const original = weeks.flatMap(w => w.sessions).find(s => s.id === change.sessionId);
       return {
-        weekId: change.weekId,
-        sessionId: change.sessionId,
-        day: change.day,
-        fromCategory: original?.category ?? null,
-        fromPrescription: original?.prescription ?? {},
-        toCategory: change.category,
-        toPrescription: change.prescription,
+        weekId: change.weekId, sessionId: change.sessionId, day: change.day,
+        fromCategory: original?.category ?? null, fromPrescription: original?.prescription ?? {},
+        toCategory: change.category, toPrescription: change.prescription,
       };
     });
-
     for (const change of changes) {
       const sessionRef = doc(db, "users", user.uid, "trainingBlocks", activeBlock.id, "trainingWeeks", change.weekId, "sessions", change.sessionId);
       batch.update(sessionRef, { category: change.category, prescription: change.prescription, manuallyModified: true });
     }
-
     const coachSessionRef = doc(collection(db, "users", user.uid, "coachSessions"));
     batch.set(coachSessionRef, {
-      appliedAt: serverTimestamp(),
-      firstMessage: meta.firstMessage,
-      summary: meta.summary,
-      changesCount: changes.length,
-      changes: logChanges,
+      appliedAt: serverTimestamp(), firstMessage: meta.firstMessage, summary: meta.summary,
+      changesCount: changes.length, changes: logChanges,
       ...(meta.incidentType && { incidentType: meta.incidentType }),
     });
-
     await batch.commit();
-
     setCoachHistory(prev => [{
       id: coachSessionRef.id,
       appliedAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 },
-      firstMessage: meta.firstMessage,
-      summary: meta.summary,
-      changesCount: changes.length,
-      changes: logChanges,
+      firstMessage: meta.firstMessage, summary: meta.summary,
+      changesCount: changes.length, changes: logChanges,
       ...(meta.incidentType && { incidentType: meta.incidentType }),
     }, ...prev].slice(0, 10));
-
     setWeeks(prev => prev.map(week => {
       const weekChanges = changes.filter(c => c.weekId === week.id);
       if (weekChanges.length === 0) return week;
@@ -489,8 +405,7 @@ export default function Home() {
 
   const logActual = async (blockId: string, weekId: string, sessionId: string, actual: Actual) => {
     if (!user) return;
-    const sessionRef = doc(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions", sessionId);
-    await updateDoc(sessionRef, { actual });
+    await updateDoc(doc(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions", sessionId), { actual });
     setWeeks(prev => prev.map(week =>
       week.id === weekId
         ? { ...week, sessions: week.sessions.map(s => s.id === sessionId ? { ...s, actual } : s) }
@@ -500,8 +415,7 @@ export default function Home() {
 
   const updateSessionPrescription = async (blockId: string, weekId: string, sessionId: string, newCategory: Category, newPrescription: Prescription) => {
     if (!user) return;
-    const sessionRef = doc(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions", sessionId);
-    await updateDoc(sessionRef, { category: newCategory, prescription: newPrescription, manuallyModified: true });
+    await updateDoc(doc(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions", sessionId), { category: newCategory, prescription: newPrescription, manuallyModified: true });
     setWeeks(prev => prev.map(week =>
       week.id === weekId
         ? { ...week, sessions: week.sessions.map(s => s.id === sessionId ? { ...s, category: newCategory, prescription: newPrescription, manuallyModified: true } : s) }
@@ -511,8 +425,7 @@ export default function Home() {
 
   const updateSessionCategory = async (blockId: string, weekId: string, sessionId: string, newCategory: Category) => {
     if (!user) return;
-    const sessionRef = doc(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions", sessionId);
-    await updateDoc(sessionRef, { category: newCategory });
+    await updateDoc(doc(db, "users", user.uid, "trainingBlocks", blockId, "trainingWeeks", weekId, "sessions", sessionId), { category: newCategory });
     setWeeks(prev => prev.map(week =>
       week.id === weekId
         ? { ...week, sessions: week.sessions.map(s => s.id === sessionId ? { ...s, category: newCategory } : s) }
@@ -520,86 +433,62 @@ export default function Home() {
     ));
   };
 
+  // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-stone-950">
         <div className="flex flex-col items-center gap-6 animate-pulse">
           <div className="w-20 h-20 rounded-2xl bg-stone-900 flex items-center justify-center">
-            <span className="text-4xl font-black text-white tracking-tighter">C</span>
+            <span className="font-display font-black text-4xl text-white tracking-tighter">C</span>
           </div>
         </div>
       </main>
     );
   }
 
+  // ── Sign in ────────────────────────────────────────────────────────────────
   if (!user) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
-        <button
-          onClick={() => signInWithPopup(auth, new GoogleAuthProvider())}
-          className="bg-black text-white px-6 py-3 rounded-lg"
-        >
-          Sign in with Google
-        </button>
+      <main className="flex min-h-screen items-center justify-center bg-stone-950">
+        <div className="flex flex-col items-center gap-8">
+          <div className="w-16 h-16 rounded-2xl bg-stone-900 flex items-center justify-center">
+            <span className="font-display font-black text-3xl text-white tracking-tighter">C</span>
+          </div>
+          <button
+            onClick={() => signInWithPopup(auth, new GoogleAuthProvider())}
+            className="bg-white text-stone-900 text-[11px] tracking-[0.15em] uppercase font-semibold px-8 py-3.5 rounded-xl hover:bg-stone-100 transition-colors"
+          >
+            Sign in with Google
+          </button>
+        </div>
       </main>
     );
   }
 
+  // ── Derived state for nav ──────────────────────────────────────────────────
+  const todayDone = todaySession?.completed ?? false;
+  const hasTodaySession = !!(todaySession?.category && todaySession.category !== "Rest");
+
+  // ── App ───────────────────────────────────────────────────────────────────
   return (
-    <main className="max-w-md mx-auto px-5 py-8 flex flex-col gap-5">
+    <div className="max-w-[430px] mx-auto relative">
 
-      <div className="flex justify-between items-center">
-        <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400">{user.displayName}</p>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setView("today")}
-            className={`text-[10px] tracking-[0.15em] uppercase transition-colors ${view === "today" ? "text-stone-900 font-semibold" : "text-stone-400 hover:text-stone-700"}`}
-          >
-            Today
-          </button>
-          <button
-            onClick={() => setView("plan")}
-            className={`text-[10px] tracking-[0.15em] uppercase transition-colors ${view === "plan" ? "text-stone-900 font-semibold" : "text-stone-400 hover:text-stone-700"}`}
-          >
-            Plan
-          </button>
-          <button
-            onClick={() => setView("review")}
-            className={`text-[10px] tracking-[0.15em] uppercase transition-colors ${view === "review" ? "text-stone-900 font-semibold" : "text-stone-400 hover:text-stone-700"}`}
-          >
-            Review
-          </button>
-          <button
-            onClick={() => setView("progress")}
-            className={`text-[10px] tracking-[0.15em] uppercase transition-colors ${view === "progress" ? "text-stone-900 font-semibold" : "text-stone-400 hover:text-stone-700"}`}
-          >
-            Progress
-          </button>
-          <button onClick={() => signOut(auth)} className="text-[10px] tracking-[0.15em] uppercase text-stone-400 hover:text-stone-700 transition-colors">
-            Sign out
-          </button>
-        </div>
-      </div>
-
-      {/* Today: TodayWorkout + ActiveBlock */}
-      {view === "today" && (
-        <TodayView
+      {/* NOW zone */}
+      <div className={zone !== "now" ? "hidden" : ""}>
+        <NowZone
           activeBlock={activeBlock}
-          weeks={weeks}
           currentWeek={currentWeek}
           todaySession={todaySession}
-          todayDay={todayDay}
-          goal={goal}
-          eventDate={eventDate}
           stravaToken={stravaAccessToken ?? undefined}
           onToggleSession={toggleSession}
           onLogActual={logActual}
+          onGoToBlock={() => setZone("block")}
         />
-      )}
+      </div>
 
-      {/* Plan view */}
-      {view === "plan" && (
-        <PlanView
+      {/* BLOCK zone */}
+      <div className={zone !== "block" ? "hidden" : ""}>
+        <BlockZone
           uid={user.uid}
           activeBlock={activeBlock}
           queuedBlock={queuedBlock}
@@ -625,53 +514,39 @@ export default function Home() {
           onRemoveQueuedBlock={handleRemoveQueuedBlock}
           onActivateQueuedBlock={handleActivateQueuedBlock}
         />
-      )}
+      </div>
 
-      {/* Review */}
-      {view === "review" && (
-        <ReviewView activeBlock={activeBlock} weeks={weeks} />
-      )}
+      {/* COACH zone — always mounted so conversation state persists */}
+      <div className={zone !== "coach" ? "hidden" : ""}>
+        <CoachZone
+          activeBlock={activeBlock}
+          weeks={weeks}
+          todaySession={todaySession}
+          eventDate={eventDate}
+          coachHistory={coachHistory}
+          progressContext={progressContext}
+          userName={user.displayName ?? user.email ?? ""}
+          onApplyChanges={applyChanges}
+        />
+      </div>
 
-      {/* Progress */}
-      {view === "progress" && (
-        <ProgressView completedBlocks={completedBlocks} coachHistory={coachHistory} />
-      )}
+      {/* PROGRESS zone */}
+      <div className={zone !== "progress" ? "hidden" : ""}>
+        <ProgressZone
+          activeBlock={activeBlock}
+          weeks={weeks}
+          completedBlocks={completedBlocks}
+          coachHistory={coachHistory}
+        />
+      </div>
 
-      {/* Coach — always mounted so conversation survives view switches, only on Today */}
-      {weeks.length > 0 && (
-        <div className={view === "today" ? "" : "hidden"}>
-          <CoachChat weeks={weeks} coachHistory={coachHistory} progressContext={progressContext} onApplyChanges={applyChanges} />
-        </div>
-      )}
-
-      {/* Today: TrainingWeeks + manage link */}
-      {view === "today" && weeks.length > 0 && activeBlock && (
-        <>
-          <TrainingWeeks
-            weeks={weeks}
-            blockId={activeBlock.id}
-            blockGoal={goal || activeBlock.primaryGoal}
-            expandedWeek={expandedWeek}
-            currentWeekId={currentWeek?.id ?? null}
-            todayDay={todayDay}
-            onToggleExpand={(id) => setExpandedWeek(expandedWeek === id ? null : id)}
-            onToggleSession={toggleSession}
-            onCategoryChange={updateSessionCategory}
-            onLogActual={logActual}
-            onEditPrescription={updateSessionPrescription}
-            onApplyChanges={applyChanges}
-          />
-          <div className="pb-2">
-            <button
-              onClick={() => setView("plan")}
-              className="text-[10px] tracking-[0.15em] uppercase text-stone-300 hover:text-stone-500 transition-colors"
-            >
-              Manage training block →
-            </button>
-          </div>
-        </>
-      )}
-
-    </main>
+      {/* Bottom navigation */}
+      <BottomNav
+        zone={zone}
+        onChange={setZone}
+        todayDone={todayDone}
+        hasTodaySession={hasTodaySession}
+      />
+    </div>
   );
 }

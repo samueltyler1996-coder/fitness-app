@@ -24,15 +24,15 @@ function daysUntil(dateStr: string): number | null {
   return Math.ceil((target.getTime() - today.getTime()) / 86400000);
 }
 
-function sessionDotColor(session: Session | undefined): string {
-  if (!session?.category || session.category === "Rest") {
-    return session?.completed ? "bg-stone-300" : "bg-stone-100";
-  }
-  const pending: Record<string, string> = { Run: "bg-blue-200", Strength: "bg-amber-200", WOD: "bg-violet-200" };
-  const done: Record<string, string> = { Run: "bg-blue-600", Strength: "bg-amber-500", WOD: "bg-violet-600" };
-  return session.completed
-    ? (done[session.category] ?? "bg-stone-400")
-    : (pending[session.category] ?? "bg-stone-100");
+function sessionCellBg(session: Session | undefined): string {
+  if (!session?.category || session.category === "Rest") return "";
+  if (session.completed) return "bg-stone-800";
+  return "bg-stone-200";
+}
+
+function sessionTypeChar(session: Session | undefined): string {
+  if (!session?.category || session.category === "Rest") return "";
+  return { Run: "R", Strength: "S", WOD: "W" }[session.category] ?? "";
 }
 
 function formatDateShort(dateStr: string): string {
@@ -189,20 +189,20 @@ function BlockHistory({ blocks, crossBlockInsights }: { blocks: TrainingBlock[];
               <div className="flex flex-wrap gap-x-3 gap-y-1">
                 {block.summary.runAdherence !== undefined && (
                   <span className="flex items-center gap-1 text-[10px] text-stone-500">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
-                    Run {Math.round(block.summary.runAdherence * 100)}%
+                    <span className="text-[9px] font-semibold text-stone-400">R</span>
+                    {Math.round(block.summary.runAdherence * 100)}%
                   </span>
                 )}
                 {block.summary.strengthAdherence !== undefined && (
                   <span className="flex items-center gap-1 text-[10px] text-stone-500">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
-                    Strength {Math.round(block.summary.strengthAdherence * 100)}%
+                    <span className="text-[9px] font-semibold text-stone-400">S</span>
+                    {Math.round(block.summary.strengthAdherence * 100)}%
                   </span>
                 )}
                 {block.summary.wodAdherence !== undefined && (
                   <span className="flex items-center gap-1 text-[10px] text-stone-500">
-                    <span className="w-1.5 h-1.5 rounded-full bg-violet-400 inline-block" />
-                    WOD {Math.round(block.summary.wodAdherence * 100)}%
+                    <span className="text-[9px] font-semibold text-stone-400">W</span>
+                    {Math.round(block.summary.wodAdherence * 100)}%
                   </span>
                 )}
                 {(block.summary.incidentCount ?? 0) > 0 && (
@@ -315,31 +315,31 @@ export default function PlanView({
   return (
     <div className="flex flex-col gap-6">
 
-      {/* Block header */}
+      {/* Block header — this week focus */}
       <div className="py-4 border-t border-stone-100">
-        <div className="flex items-start justify-between mb-3">
+        <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400 mb-3">{activeBlock.name}</p>
+        <div className="flex items-end justify-between mb-4">
           <div>
-            {goal && <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400 mb-1">{goal}</p>}
-            <h1 className="text-xl font-black tracking-tight">{activeBlock.name}</h1>
+            {currentWeekIndex >= 0 ? (
+              <>
+                <p className="font-display font-black text-stone-900 leading-none" style={{ fontSize: "42px" }}>
+                  Week {currentWeekIndex + 1}
+                </p>
+                <p className="text-[11px] text-stone-400 mt-1">of {weeks.length} · {goal}</p>
+              </>
+            ) : (
+              <p className="text-xl font-black text-stone-900">{goal}</p>
+            )}
           </div>
-          {daysToRace !== null && daysToRace > 0 && (
-            <div className="text-right">
-              <p className="text-3xl font-black tabular-nums leading-none">{daysToRace}</p>
-              <p className="text-[9px] tracking-[0.15em] uppercase text-stone-400 mt-0.5">days</p>
-            </div>
-          )}
-        </div>
-        <div className="flex items-center justify-between text-[11px] text-stone-400 mb-2">
-          {currentWeekIndex >= 0
-            ? <span>Week <span className="font-bold text-stone-900">{currentWeekIndex + 1}</span> of {weeks.length}</span>
-            : <span>—</span>
-          }
-          <span>{done} of {total} sessions done</span>
+          <div className="text-right">
+            <p className="text-[13px] font-semibold text-stone-700">{done}/{total}</p>
+            <p className="text-[10px] text-stone-400">sessions done</p>
+          </div>
         </div>
         {total > 0 && (
-          <div className="w-full h-1 bg-stone-100 rounded-full overflow-hidden">
+          <div className="w-full h-[3px] bg-stone-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-stone-700 rounded-full transition-all duration-500"
+              className="h-full bg-stone-800 rounded-full transition-all duration-500"
               style={{ width: `${Math.round((done / total) * 100)}%` }}
             />
           </div>
@@ -349,9 +349,10 @@ export default function PlanView({
       {/* Insight signals — planning context */}
       {insights.length > 0 && (
         <div className="flex flex-col gap-2 -mt-2">
-          <p className="text-[9px] tracking-[0.15em] uppercase text-stone-400">Based on recent weeks</p>
           {insights.map((signal, i) => (
-            <InsightCard key={i} signal={signal} />
+            <p key={i} className="text-[12px] text-stone-500 leading-relaxed pl-3 border-l-2 border-stone-200">
+              {signal.message}
+            </p>
           ))}
         </div>
       )}
@@ -359,18 +360,15 @@ export default function PlanView({
       {/* Week overview grid */}
       <div className="flex flex-col gap-1">
         {/* Legend */}
-        <div className="flex items-center gap-4 mb-3">
-          {[["Run", "bg-blue-200"], ["Strength", "bg-amber-200"], ["WOD", "bg-violet-200"], ["Rest", "bg-stone-100 border border-stone-200"]].map(([label, color]) => (
-            <div key={label} className="flex items-center gap-1">
-              <div className={`w-2.5 h-2.5 rounded-sm ${color}`} />
-              <span className="text-[9px] uppercase tracking-wide text-stone-400">{label}</span>
-            </div>
-          ))}
-          <div className="flex items-center gap-1 ml-auto">
-            <div className="w-2.5 h-2.5 rounded-sm bg-blue-600 flex items-center justify-center">
-              <span className="text-[6px] text-white font-bold">✓</span>
-            </div>
-            <span className="text-[9px] uppercase tracking-wide text-stone-400">Done</span>
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
+          <span className="text-[10px] text-stone-400">R = Run</span>
+          <span className="text-stone-300 text-[10px]">·</span>
+          <span className="text-[10px] text-stone-400">S = Strength</span>
+          <span className="text-stone-300 text-[10px]">·</span>
+          <span className="text-[10px] text-stone-400">W = WOD</span>
+          <div className="ml-auto flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-[2px] bg-stone-800" />
+            <span className="text-[10px] text-stone-400">Done</span>
           </div>
         </div>
 
@@ -423,10 +421,12 @@ export default function PlanView({
                             : { type: "day", weekId: week.id, sessionId: session.id }
                         );
                       }}
-                      className={`relative flex-1 h-7 rounded-sm cursor-pointer transition-all ${sessionDotColor(session)} ${isToday ? "ring-2 ring-stone-800 ring-offset-1" : ""} ${isSelected ? "ring-2 ring-stone-500 ring-offset-1" : ""}`}
+                      className={`relative flex-1 h-[26px] rounded-[2px] cursor-pointer transition-all ${sessionCellBg(session)} ${isToday ? "ring-1 ring-red-600 ring-offset-1" : ""} ${isSelected ? "ring-1 ring-stone-500 ring-offset-1" : ""}`}
                     >
-                      {session?.completed && (
-                        <span className="absolute inset-0 flex items-center justify-center text-[8px] text-white/70 font-bold leading-none">✓</span>
+                      {session?.completed ? (
+                        <span className="absolute inset-0 flex items-center justify-center text-[7px] text-white/50 font-bold leading-none">✓</span>
+                      ) : (
+                        <span className="absolute inset-0 flex items-center justify-center text-[7px] text-stone-500 font-semibold leading-none">{sessionTypeChar(session)}</span>
                       )}
                     </div>
                   );
@@ -531,15 +531,15 @@ export default function PlanView({
         </button>
 
         <div className="pt-4 border-t border-stone-100 flex flex-col gap-3">
-          <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-            Generating a new block will replace your current active block and all its sessions.
+          <p className="text-[11px] text-stone-400 leading-relaxed">
+            Generating a new block will archive the current one and all its sessions.
           </p>
           <button
             onClick={onCreateBlock}
             disabled={creating}
-            className="w-full bg-stone-900 hover:bg-stone-800 text-white text-sm font-semibold py-4 rounded-xl disabled:opacity-40 transition-colors tracking-wide"
+            className="self-start text-[11px] tracking-[0.1em] uppercase text-stone-500 hover:text-stone-900 border border-stone-200 hover:border-stone-400 rounded-lg px-4 py-2 transition-colors disabled:opacity-40"
           >
-            {creating ? "Generating plan…" : "Generate New Training Block"}
+            {creating ? "Generating…" : "Start new block"}
           </button>
         </div>
 
