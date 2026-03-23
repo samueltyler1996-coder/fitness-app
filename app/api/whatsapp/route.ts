@@ -259,6 +259,7 @@ Training sessions available to modify:
 ${JSON.stringify(weeksContext, null, 2)}
 
 Rules:
+- IMPORTANT: Only propose changes if the athlete explicitly asks to modify, skip, swap, or adjust a session. For conversational messages (check-ins, logging a completed run, general chat, questions), return an empty changes array and just reply conversationally.
 - Only modify uncompleted future sessions
 - category: "Run" | "Strength" | "WOD" | "Rest" exactly
 - For Run: type, distanceKm, targetPace, guidance
@@ -282,7 +283,8 @@ IMPORTANT: Respond with valid JSON only.
     const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
     if (!cleaned.startsWith("{")) return { summary: cleaned, changes: [] };
     const json = JSON.parse(cleaned);
-    return { summary: json.summary ?? "", changes: json.changes ?? [] };
+    const summary = (json.summary ?? "").replace(/```[\s\S]*?```/g, "").trim();
+    return { summary, changes: json.changes ?? [] };
   } catch (err) {
     console.error("WhatsApp AI error:", err);
     return { summary: "Sorry, I ran into an issue. Try again in a moment.", changes: [] };

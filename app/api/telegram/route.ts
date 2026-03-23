@@ -236,6 +236,7 @@ Training sessions available to modify:
 ${JSON.stringify(weeksContext, null, 2)}
 
 Rules:
+- IMPORTANT: Only propose changes if the athlete explicitly asks to modify, skip, swap, or adjust a session. For conversational messages (check-ins, logging a completed run, general chat, questions), return an empty changes array and just reply conversationally.
 - Only modify uncompleted future sessions
 - category: "Run" | "Strength" | "WOD" | "Rest" exactly
 - For Run: type, distanceKm, targetPace, guidance
