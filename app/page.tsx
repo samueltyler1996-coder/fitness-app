@@ -34,6 +34,7 @@ export default function Home() {
   const [zone, setZone] = useState<Zone>("now");
   const [stravaAthleteInfo, setStravaAthleteInfo] = useState<string | null>(null);
   const [stravaAccessToken, setStravaAccessToken] = useState<string | null>(null);
+  const [telegramChatId, setTelegramChatId] = useState("");
 
   const todayISO = new Date().toISOString().split("T")[0];
   const todayDate = new Date(todayISO);
@@ -168,6 +169,7 @@ export default function Home() {
           const data = userSnap.data();
           setGoal(data.currentGoal || "");
           setEventDate(data.eventDate || "");
+          setTelegramChatId(data.telegramChatId || "");
         }
 
         setUser(currentUser);
@@ -264,6 +266,12 @@ export default function Home() {
   const handleSave = async () => {
     if (!user) return;
     await setDoc(doc(db, "users", user.uid), { currentGoal: goal, eventDate }, { merge: true });
+  };
+
+  const handleSaveTelegramChatId = async (chatId: string) => {
+    if (!user) return;
+    await setDoc(doc(db, "users", user.uid), { telegramChatId: chatId }, { merge: true });
+    setTelegramChatId(chatId);
   };
 
   const handleQueueBlock = async (nextGoal: string, numWeeks: number) => {
@@ -526,7 +534,9 @@ export default function Home() {
           coachHistory={coachHistory}
           progressContext={progressContext}
           userName={user.displayName ?? user.email ?? ""}
+          telegramChatId={telegramChatId}
           onApplyChanges={applyChanges}
+          onSaveTelegramChatId={handleSaveTelegramChatId}
         />
       </div>
 

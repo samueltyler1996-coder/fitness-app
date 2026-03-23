@@ -1,0 +1,290 @@
+import { NextRequest, NextResponse } from "next/server";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { FieldValue } from "firebase-admin/firestore";
+import { adminDb } from "../../../lib/firebase-admin";
+import { formatProgressContext } from "../../../lib/analytics";
+import { TrainingBlock, TrainingWeek, Session, SessionChange, CoachSessionChange, CoachSessionLog } from "../../../lib/types";
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+interface ConversationMessage {
+  role: "user" | "coach";
+  content: string;
+  changes?: SessionChange[];
+}
+
+// ── Webhook verification ──────────────────────────────────────────────────────
+
+export async function GET(req: NextRequest) {
+  const p = req.nextUrl.searchParams;
+  if (p.get("hub.mode") === "subscribe" && p.get("hub.verify_token") === process.env.WHATSAPP_VERIFY_TOKEN) {
+    return new Response(p.get("hub.challenge") ?? "", { status: 200 });
+  }
+  return new Response("Forbidden", { status: 403 });
+}
+
+// ── Incoming message ──────────────────────────────────────────────────────────
+
+export async function POST(req: NextRequest) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const body: any = await req.json();
+  const message = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+
+  // Ignore non-message events (status updates, read receipts etc.)
+  if (!message) return NextResponse.json({ status: "ok" });
+
+  const phone: string = message.from; // e.g. "447911123456"
+
+  if (message.type !== "text") {
+    await sendMessage(phone, "Please send text messages — I can't read other formats yet.");
+    return NextResponse.json({ status: "ok" });
+  }
+
+  const text: string = message.text.body.trim();
+
+  // Look up user by phone
+  const usersSnap = await adminDb.collection("users").where("whatsappPhone", "==", phone).limit(1).get();
+  if (usersSnap.empty) {
+    await sendMessage(phone, "No account linked to this number. Open the app and connect your WhatsApp under the Coach tab.");
+    return NextResponse.json({ status: "ok" });
+  }
+
+  const userDoc = usersSnap.docs[0];
+  const uid = userDoc.id;
+  const userData = userDoc.data();
+
+  // ── YES / NO flow for pending changes ─────────────────────────────────────
+
+  const pending = userData.pendingWhatsappChanges ?? null;
+  if (pending) {
+    const reply = text.toLowerCase();
+    if (reply === "yes" || reply === "y") {
+      await applyPendingChanges(uid, pending);
+      await adminDb.doc(`users/${uid}`).update({ pendingWhatsappChanges: FieldValue.delete() });
+      await sendMessage(phone, `✓ Changes applied. ${pending.summary}`);
+      return NextResponse.json({ status: "ok" });
+    }
+    if (reply === "no" || reply === "n") {
+      await adminDb.doc(`users/${uid}`).update({ pendingWhatsappChanges: FieldValue.delete() });
+      await sendMessage(phone, "Got it — no changes made.");
+      return NextResponse.json({ status: "ok" });
+    }
+    // Not YES/NO: remind them before accepting a new message
+    await sendMessage(phone, `You have pending changes: ${pending.summary}\n\nReply YES to apply or NO to cancel first.`);
+    return NextResponse.json({ status: "ok" });
+  }
+
+  // ── Coaching flow ─────────────────────────────────────────────────────────
+
+  // Active block
+  const blocksSnap = await adminDb.collection(`users/${uid}/trainingBlocks`).where("status", "==", "active").limit(1).get();
+  if (blocksSnap.empty) {
+    await sendMessage(phone, "You don't have an active training block. Create one in the app first.");
+    return NextResponse.json({ status: "ok" });
+  }
+  const activeBlock = { id: blocksSnap.docs[0].id, ...blocksSnap.docs[0].data() } as TrainingBlock;
+
+  // Weeks + sessions
+  const weeksSnap = await adminDb.collection(`users/${uid}/trainingBlocks/${activeBlock.id}/trainingWeeks`).orderBy("startDate", "asc").get();
+  const weeks: TrainingWeek[] = await Promise.all(weeksSnap.docs.map(async (weekDoc) => {
+    const sessionsSnap = await adminDb.collection(`users/${uid}/trainingBlocks/${activeBlock.id}/trainingWeeks/${weekDoc.id}/sessions`).get();
+    const weekData = weekDoc.data() as Omit<TrainingWeek, "id" | "sessions">;
+    const sessions: Session[] = sessionsSnap.docs
+      .map(s => ({ id: s.id, ...s.data() } as Session))
+      .sort((a, b) => getDayOffset(weekData.startDate, a.day) - getDayOffset(weekData.startDate, b.day));
+    return { id: weekDoc.id, ...weekData, sessions };
+  }));
+
+  // Coach history
+  const historySnap = await adminDb.collection(`users/${uid}/coachSessions`).orderBy("appliedAt", "desc").limit(10).get();
+  const coachHistory = historySnap.docs.map(d => ({ id: d.id, ...d.data() } as CoachSessionLog));
+
+  // Progress context from completed blocks
+  const completedSnap = await adminDb.collection(`users/${uid}/trainingBlocks`).where("status", "==", "completed").get();
+  const completedBlocks = completedSnap.docs.map(d => ({ id: d.id, ...d.data() } as TrainingBlock));
+  const progressContext = formatProgressContext(completedBlocks, coachHistory);
+
+  // Conversation history (rolling 20 messages)
+  const conversation: ConversationMessage[] = userData.whatsappConversation ?? [];
+  const updatedConversation: ConversationMessage[] = [...conversation, { role: "user", content: text }];
+
+  // Call AI
+  const aiResponse = await callAdaptPlan(updatedConversation, weeks, coachHistory, progressContext);
+
+  const finalConversation: ConversationMessage[] = [
+    ...updatedConversation,
+    { role: "coach" as const, content: aiResponse.summary, changes: aiResponse.changes },
+  ].slice(-20);
+
+  if (aiResponse.changes.length > 0) {
+    await adminDb.doc(`users/${uid}`).update({
+      whatsappConversation: finalConversation,
+      pendingWhatsappChanges: {
+        changes: aiResponse.changes,
+        firstMessage: text,
+        summary: aiResponse.summary,
+        blockId: activeBlock.id,
+      },
+    });
+    await sendMessage(phone, `${aiResponse.summary}\n\nReply YES to apply or NO to cancel.`);
+  } else {
+    await adminDb.doc(`users/${uid}`).update({ whatsappConversation: finalConversation });
+    await sendMessage(phone, aiResponse.summary);
+  }
+
+  return NextResponse.json({ status: "ok" });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+async function sendMessage(to: string, body: string) {
+  const url = `https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+    },
+    body: JSON.stringify({ messaging_product: "whatsapp", to, type: "text", text: { body } }),
+  });
+  if (!res.ok) console.error("WhatsApp send error:", await res.text());
+}
+
+function getDayOffset(weekStartDate: string, day: string): number {
+  const start = new Date(weekStartDate + "T12:00:00");
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    if (DAY_NAMES[d.getDay()] === day) return i;
+  }
+  return 0;
+}
+
+function getSessionDate(weekStartDate: string, day: string): Date {
+  const start = new Date(weekStartDate + "T12:00:00");
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    if (DAY_NAMES[d.getDay()] === day) return d;
+  }
+  return start;
+}
+
+async function applyPendingChanges(uid: string, pending: {
+  changes: SessionChange[];
+  firstMessage: string;
+  summary: string;
+  blockId: string;
+}) {
+  const batch = adminDb.batch();
+
+  const logChanges: CoachSessionChange[] = await Promise.all(pending.changes.map(async (change) => {
+    const ref = adminDb.doc(`users/${uid}/trainingBlocks/${pending.blockId}/trainingWeeks/${change.weekId}/sessions/${change.sessionId}`);
+    const snap = await ref.get();
+    const original = snap.data() as Session | undefined;
+    return {
+      weekId: change.weekId, sessionId: change.sessionId, day: change.day,
+      fromCategory: original?.category ?? null,
+      fromPrescription: original?.prescription ?? {},
+      toCategory: change.category,
+      toPrescription: change.prescription,
+    };
+  }));
+
+  for (const change of pending.changes) {
+    const ref = adminDb.doc(`users/${uid}/trainingBlocks/${pending.blockId}/trainingWeeks/${change.weekId}/sessions/${change.sessionId}`);
+    batch.update(ref, { category: change.category, prescription: change.prescription, manuallyModified: true });
+  }
+
+  const coachRef = adminDb.collection(`users/${uid}/coachSessions`).doc();
+  batch.set(coachRef, {
+    appliedAt: FieldValue.serverTimestamp(),
+    firstMessage: pending.firstMessage,
+    summary: pending.summary,
+    changesCount: pending.changes.length,
+    changes: logChanges,
+  });
+
+  await batch.commit();
+}
+
+async function callAdaptPlan(
+  conversation: ConversationMessage[],
+  weeks: TrainingWeek[],
+  coachHistory: CoachSessionLog[],
+  progressContext: string,
+): Promise<{ summary: string; changes: SessionChange[] }> {
+  const today = new Date(new Date().toISOString().split("T")[0]);
+
+  const weeksContext = weeks
+    .map((week) => ({
+      weekId: week.id,
+      startDate: week.startDate,
+      endDate: week.endDate,
+      sessions: week.sessions
+        .filter((s) => !s.completed && getSessionDate(week.startDate, s.day) >= today)
+        .map((s) => ({
+          sessionId: s.id, day: s.day, category: s.category,
+          prescription: s.prescription, manuallyModified: s.manuallyModified ?? false,
+        })),
+    }))
+    .filter((w) => w.sessions.length > 0);
+
+  const conversationHistory = conversation.map((m) => {
+    if (m.role === "user") return `Athlete: ${m.content}`;
+    let t = `Coach: ${m.content}`;
+    if (m.changes?.length) {
+      t += `\nProposed:\n${m.changes.map((c) => `  - ${c.day}: ${c.category}`).join("\n")}`;
+    }
+    return t;
+  }).join("\n\n");
+
+  const historyContext = coachHistory.length > 0
+    ? `Coaching history:\n${coachHistory.map((s) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const date = new Date((s.appliedAt as any).seconds * 1000).toISOString().split("T")[0];
+        return `- ${date}: "${s.firstMessage}" → ${s.changesCount} changed`;
+      }).join("\n")}\n\n`
+    : "";
+
+  const progressCtx = progressContext ? `${progressContext}\n\n` : "";
+
+  const prompt = `You are an adaptive running and fitness coach. This conversation is via WhatsApp — keep replies concise (2 sentences max).
+
+${progressCtx}${historyContext}Conversation:
+${conversationHistory}
+
+Training sessions available to modify:
+${JSON.stringify(weeksContext, null, 2)}
+
+Rules:
+- Only modify uncompleted future sessions
+- category: "Run" | "Strength" | "WOD" | "Rest" exactly
+- For Run: type, distanceKm, targetPace, guidance
+- For Strength: focus, goal, durationMin, guidance, sections (warmup/main/accessory arrays with exercises)
+- For WOD: format, focus, durationCapMin, guidance, sections.main with stations array
+- For Rest: { guidance, recoveryType: "full_rest" }
+- Avoid changing manuallyModified:true sessions unless explicitly asked
+- Keep summary to 2 sentences — this is WhatsApp
+
+IMPORTANT: Respond with valid JSON only.
+
+{
+  "summary": "2-sentence coach reply",
+  "changes": [{ "weekId": "...", "sessionId": "...", "day": "...", "category": "...", "prescription": {} }]
+}`;
+
+  try {
+    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.5-flash" });
+    const result = await model.generateContent(prompt);
+    const raw = result.response.text();
+    const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+    if (!cleaned.startsWith("{")) return { summary: cleaned, changes: [] };
+    const json = JSON.parse(cleaned);
+    return { summary: json.summary ?? "", changes: json.changes ?? [] };
+  } catch (err) {
+    console.error("WhatsApp AI error:", err);
+    return { summary: "Sorry, I ran into an issue. Try again in a moment.", changes: [] };
+  }
+}

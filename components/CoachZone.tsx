@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { TrainingBlock, TrainingWeek, Session, SessionChange, CoachSessionLog, IncidentType } from "../lib/types";
 import CoachChat from "./CoachChat";
 import { signOut } from "firebase/auth";
@@ -13,7 +14,9 @@ interface Props {
   coachHistory: CoachSessionLog[];
   progressContext: string;
   userName: string;
+  telegramChatId: string;
   onApplyChanges: (changes: SessionChange[], meta: { firstMessage: string; summary: string; incidentType?: IncidentType }) => Promise<void>;
+  onSaveTelegramChatId: (chatId: string) => Promise<void>;
 }
 
 function daysUntil(dateStr: string): number | null {
@@ -40,8 +43,12 @@ function sessionLabel(session: Session | null): string {
 }
 
 export default function CoachZone({
-  activeBlock, weeks, todaySession, eventDate, coachHistory, progressContext, userName, onApplyChanges,
+  activeBlock, weeks, todaySession, eventDate, coachHistory, progressContext, userName,
+  telegramChatId, onApplyChanges, onSaveTelegramChatId,
 }: Props) {
+  const [phoneInput, setPhoneInput] = useState("");
+  const [savingPhone, setSavingPhone] = useState(false);
+  const [showPhoneForm, setShowPhoneForm] = useState(false);
   const daysToRace = daysUntil(eventDate);
   const label = sessionLabel(todaySession);
   const isDone = todaySession?.completed ?? false;
@@ -112,8 +119,70 @@ export default function CoachZone({
         )}
       </div>
 
+      {/* Telegram connect */}
+      <div className="px-5 pt-2 pb-1 border-t border-stone-200/60">
+        {telegramChatId ? (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <p className="text-[10px] tracking-[0.12em] uppercase text-stone-400">
+                Telegram connected
+              </p>
+            </div>
+            <button
+              onClick={async () => { await onSaveTelegramChatId(""); }}
+              className="text-[10px] tracking-[0.12em] uppercase text-stone-300 hover:text-stone-500 transition-colors"
+            >
+              Disconnect
+            </button>
+          </div>
+        ) : showPhoneForm ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-[10px] text-stone-400 leading-relaxed">
+              Message your bot on Telegram first — it will reply with your chat ID.
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Chat ID (e.g. 123456789)"
+                value={phoneInput}
+                onChange={e => setPhoneInput(e.target.value.replace(/[^0-9]/g, ""))}
+                className="flex-1 text-[11px] bg-transparent border-b border-stone-300 pb-0.5 text-stone-700 placeholder:text-stone-300 outline-none"
+              />
+              <button
+                onClick={async () => {
+                  if (!phoneInput) return;
+                  setSavingPhone(true);
+                  await onSaveTelegramChatId(phoneInput);
+                  setPhoneInput("");
+                  setShowPhoneForm(false);
+                  setSavingPhone(false);
+                }}
+                disabled={savingPhone || !phoneInput}
+                className="text-[10px] tracking-[0.12em] uppercase text-stone-700 disabled:text-stone-300 transition-colors"
+              >
+                {savingPhone ? "Saving…" : "Save"}
+              </button>
+              <button
+                onClick={() => { setShowPhoneForm(false); setPhoneInput(""); }}
+                className="text-[10px] tracking-[0.12em] uppercase text-stone-300 hover:text-stone-500 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowPhoneForm(true)}
+            className="text-[10px] tracking-[0.12em] uppercase text-stone-300 hover:text-stone-500 transition-colors"
+          >
+            + Connect Telegram
+          </button>
+        )}
+      </div>
+
       {/* Sign out — tucked at bottom */}
-      <div className="px-5 pt-2 pb-2">
+      <div className="px-5 pt-1 pb-2">
         <div className="flex items-center justify-between">
           <p className="text-[10px] tracking-[0.15em] uppercase text-stone-300">{userName}</p>
           <button
