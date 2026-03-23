@@ -6,15 +6,12 @@ let _db: Firestore | null = null;
 
 function getAdminApp(): App {
   if (!_app) {
+    const serviceAccount = JSON.parse(
+      Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? "", "base64").toString("utf8")
+    );
     _app = getApps().length
       ? getApps()[0]
-      : initializeApp({
-          credential: cert({
-            projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-            privateKey: Buffer.from(process.env.FIREBASE_PRIVATE_KEY ?? "", "base64").toString("utf8"),
-          }),
-        });
+      : initializeApp({ credential: cert(serviceAccount) });
   }
   return _app;
 }
