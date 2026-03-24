@@ -44,9 +44,7 @@ export default function RaceDayBriefing({
         if (!res.ok) throw new Error("Failed to fetch briefing");
         const data = await res.json();
         if (!cancelled) {
-          if (data.alreadySent && !data.briefing) {
-            setError("Briefing already sent today. Check your messages.");
-          } else if (data.briefing) {
+          if (data.briefing) {
             setBriefing(data.briefing);
           } else {
             setError("No briefing data returned.");

@@ -39,8 +39,8 @@ export async function POST(req: NextRequest) {
   const existing = userData.raceBriefingSent;
   if (existing && existing.eventDate === eventDate) {
     const sentAt = existing.sentAt?.toMillis ? existing.sentAt.toMillis() : 0;
-    if (Date.now() - sentAt < 24 * 60 * 60 * 1000) {
-      return NextResponse.json({ alreadySent: true });
+    if (Date.now() - sentAt < 24 * 60 * 60 * 1000 && existing.briefing) {
+      return NextResponse.json({ alreadySent: true, briefing: existing.briefing });
     }
   }
 
@@ -147,11 +147,12 @@ Generate a race morning briefing. Return ONLY valid JSON with these exact fields
       briefingData = JSON.parse(cleaned);
     }
 
-    // Mark briefing as sent
+    // Mark briefing as sent (cache content for re-reads within 24h)
     await adminDb.doc(`users/${uid}`).update({
       raceBriefingSent: {
         eventDate,
         sentAt: FieldValue.serverTimestamp(),
+        briefing: briefingData,
       },
     });
 
