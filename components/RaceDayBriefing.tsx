@@ -27,7 +27,7 @@ export default function RaceDayBriefing({
   const [briefing, setBriefing] = useState<Briefing | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,12 +63,15 @@ export default function RaceDayBriefing({
     return () => { cancelled = true; };
   }, [uid, eventDate, goal, progressContext]);
 
-  const handleCopy = () => {
+  const handleShare = async () => {
     if (!briefing?.briefingText) return;
-    navigator.clipboard.writeText(briefing.briefingText).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    if (navigator.share) {
+      await navigator.share({ text: briefing.briefingText });
+    } else {
+      await navigator.clipboard.writeText(briefing.briefingText);
+      setShared(true);
+      setTimeout(() => setShared(false), 2000);
+    }
   };
 
   return (
@@ -119,17 +122,11 @@ export default function RaceDayBriefing({
             {/* Copy message */}
             <div className="pt-4 border-t border-stone-800 flex flex-col gap-3">
               <p className="text-[10px] tracking-[0.15em] uppercase text-stone-500">Share briefing</p>
-              <textarea
-                readOnly
-                value={briefing.briefingText}
-                rows={4}
-                className="w-full bg-stone-900 border border-stone-800 rounded-xl px-4 py-3 text-sm text-stone-300 resize-none focus:outline-none"
-              />
               <button
-                onClick={handleCopy}
+                onClick={handleShare}
                 className="self-start bg-emerald-500 hover:bg-emerald-400 text-stone-950 text-[11px] tracking-[0.12em] uppercase font-semibold px-5 py-3 rounded-xl transition-colors"
               >
-                {copied ? "Copied!" : "Copy message"}
+                {shared ? "Copied!" : "Share"}
               </button>
             </div>
 
