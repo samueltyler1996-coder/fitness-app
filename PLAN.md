@@ -268,7 +268,16 @@ _Goal: let real physiological data (HRV, sleep, training readiness) inform the p
 - [ ] Proactive check-in when readiness is low (uses Phase P infrastructure)
 - [ ] Feeds ATL/CTL calculations (Phase R) with device-measured load instead of manual RPE
 
-### Phase T — Unified Athlete Profile + Block Creation UX
+### Phase T — Shareable Race Day Card
+_Goal: turn the race briefing into a viral moment — Spotify Wrapped for athletes._
+
+- [ ] Render race briefing as a designed visual card (dark background, big typography, emerald accents)
+- [ ] Card shows: goal, race date, target splits, top mental cue, app branding
+- [ ] Capture card as PNG using `html-to-image` or similar
+- [ ] Share via Web Share API with `files: [imageFile]` — lands as a real image in Instagram Stories, WhatsApp etc.
+- [ ] App branding at bottom drives traffic back to the app
+
+### Phase U — Unified Athlete Profile + Block Creation UX
 _Goal: make setup, configuration, and goal-setting feel like a first-class experience._
 
 - [ ] Dedicated Settings page: Profile (goal, event date, training preferences), Integrations (Strava, WhatsApp, Telegram), Athlete targets (predicted race times, strength 1RM, Hyrox benchmarks — editable/toggleable)
