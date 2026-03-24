@@ -1,6 +1,6 @@
 "use client";
 
-import { TrainingBlock, TrainingWeek, CoachSessionLog } from "../lib/types";
+import { TrainingBlock, TrainingWeek, CoachSessionLog, HyroxBenchmarks } from "../lib/types";
 import ReviewView from "./ReviewView";
 import ProgressView from "./ProgressView";
 
@@ -9,9 +9,10 @@ interface Props {
   weeks: TrainingWeek[];
   completedBlocks: TrainingBlock[];
   coachHistory: CoachSessionLog[];
+  hyroxBenchmarks: HyroxBenchmarks | null;
 }
 
-export default function ProgressZone({ activeBlock, weeks, completedBlocks, coachHistory }: Props) {
+export default function ProgressZone({ activeBlock, weeks, completedBlocks, coachHistory, hyroxBenchmarks }: Props) {
   return (
     <div className="min-h-screen bg-[#f8f6f3] px-5 pt-10 pb-8">
 
@@ -25,7 +26,7 @@ export default function ProgressZone({ activeBlock, weeks, completedBlocks, coac
 
       {/* Cross-block progress */}
       <div className={activeBlock && weeks.length > 0 ? "border-t border-stone-200 pt-8" : ""}>
-        <ProgressView completedBlocks={completedBlocks} coachHistory={coachHistory} />
+        <ProgressView completedBlocks={completedBlocks} coachHistory={coachHistory} hyroxBenchmarks={hyroxBenchmarks} />
       </div>
     </div>
   );

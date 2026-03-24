@@ -24,7 +24,14 @@ const WOD_FORMAT: Record<string, string> = {
   emom: "EMOM",
   intervals: "Intervals",
   stations: "Stations",
+  hyrox_simulation: "Hyrox Simulation",
 };
+
+function secsToMmss(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 export default function TodayWorkout({ session, blockId, weekId, stravaToken, onToggle, onLogActual }: Props) {
   const [logText, setLogText] = useState("");
@@ -113,7 +120,7 @@ export default function TodayWorkout({ session, blockId, weekId, stravaToken, on
     : isStrength
     ? `${strengthP?.focus ? strengthP.focus.charAt(0).toUpperCase() + strengthP.focus.slice(1) + " " : ""}Strength`
     : isWod
-    ? (wodP?.sections?.main?.wodName ?? WOD_FORMAT[wodP?.format ?? ""] ?? "WOD")
+    ? (wodP?.format === "hyrox_simulation" ? "Hyrox Simulation" : (wodP?.sections?.main?.wodName ?? WOD_FORMAT[wodP?.format ?? ""] ?? "WOD"))
     : "Rest";
 
   const mainExercises = strengthP?.sections?.main ?? [];
@@ -269,8 +276,65 @@ export default function TodayWorkout({ session, blockId, weekId, stravaToken, on
         </div>
       )}
 
-      {/* WOD */}
-      {isWod && !completed && (
+      {/* WOD — Hyrox Simulation */}
+      {isWod && !completed && wodP?.format === "hyrox_simulation" && (
+        <div className="mt-5 flex flex-col gap-4">
+          <div className="flex gap-4">
+            {wodP?.durationCapMin && (
+              <div>
+                <p className="text-[10px] tracking-[0.15em] uppercase text-stone-400">Cap</p>
+                <p className="text-sm font-semibold">{wodP.durationCapMin} min</p>
+              </div>
+            )}
+            <div>
+              <p className="text-[10px] tracking-[0.15em] uppercase text-stone-400">Structure</p>
+              <p className="text-sm font-semibold">8 rounds: 1km Run + Station</p>
+            </div>
+          </div>
+          {wodP?.sections?.main?.stations && wodP.sections.main.stations.length > 0 && (
+            <div>
+              <p className="text-[10px] tracking-[0.15em] uppercase text-stone-400 mb-2">Rounds</p>
+              <div className="flex flex-col gap-2">
+                {Array.from({ length: 8 }).map((_, roundIdx) => {
+                  const runStation = wodP!.sections.main.stations[roundIdx * 2];
+                  const workStation = wodP!.sections.main.stations[roundIdx * 2 + 1];
+                  if (!runStation && !workStation) return null;
+                  return (
+                    <div key={roundIdx} className="flex items-start gap-2 text-sm">
+                      <span className="text-stone-300 text-[11px] w-5 shrink-0 pt-0.5">R{roundIdx + 1}</span>
+                      <div className="flex flex-col gap-0.5">
+                        {runStation && (
+                          <span className="text-stone-700">
+                            {runStation.movement}
+                            {runStation.notes && <span className="text-stone-400 text-[11px] ml-1">— {runStation.notes}</span>}
+                          </span>
+                        )}
+                        {workStation && (
+                          <span className="text-stone-700">
+                            {workStation.movement}
+                            {workStation.distance && <span className="text-stone-500 text-[11px] ml-1">{workStation.distance}</span>}
+                            {workStation.targetSeconds != null && (
+                              <span className="text-violet-500 text-[11px] ml-1">(target: {secsToMmss(workStation.targetSeconds)})</span>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {wodP?.guidance && (
+            <div className="pt-3 border-t border-stone-100">
+              <p className="text-[11px] text-stone-400 leading-relaxed">{wodP.guidance}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* WOD — standard */}
+      {isWod && !completed && wodP?.format !== "hyrox_simulation" && (
         <div className="mt-5 flex flex-col gap-4">
           {wodP?.sections?.main?.structure && (
             <p className="text-sm font-medium text-stone-700">{wodP.sections.main.structure}</p>

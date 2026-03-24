@@ -1,11 +1,12 @@
 "use client";
 
-import { TrainingBlock, CoachSessionLog } from "../lib/types";
+import { TrainingBlock, CoachSessionLog, HyroxBenchmarks } from "../lib/types";
 import { computeProgressInsights, secsTopace, ProgressSignal } from "../lib/analytics";
 
 interface Props {
   completedBlocks: TrainingBlock[];
   coachHistory: CoachSessionLog[];
+  hyroxBenchmarks: HyroxBenchmarks | null;
 }
 
 const CATEGORY_COLORS: Record<ProgressSignal["category"], string> = {
@@ -39,7 +40,24 @@ function SignalCard({ signal }: { signal: ProgressSignal }) {
   );
 }
 
-export default function ProgressView({ completedBlocks, coachHistory }: Props) {
+function secsToMmss(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+const HYROX_STATION_LABELS: { key: keyof Omit<HyroxBenchmarks, "weightCategory" | "lastUpdated">; label: string; isReps: boolean }[] = [
+  { key: "skiErg",          label: "SkiErg 1000m",          isReps: false },
+  { key: "sledPush",        label: "Sled Push 50m",          isReps: false },
+  { key: "sledPull",        label: "Sled Pull 50m",          isReps: false },
+  { key: "burpeeBroadJump", label: "Burpee Broad Jump 80m",  isReps: false },
+  { key: "rowing",          label: "Rowing 1000m",           isReps: false },
+  { key: "farmersCarry",    label: "Farmer's Carry 200m",    isReps: false },
+  { key: "sandbagLunges",   label: "Sandbag Lunges 100m",    isReps: false },
+  { key: "wallBalls",       label: "Wall Balls (reps/2min)", isReps: true  },
+];
+
+export default function ProgressView({ completedBlocks, coachHistory, hyroxBenchmarks }: Props) {
   const withSummary = completedBlocks.filter(b => b.summary);
 
   if (withSummary.length === 0) {
@@ -151,6 +169,29 @@ export default function ProgressView({ completedBlocks, coachHistory }: Props) {
         <div className="flex flex-col gap-3">
           <p className="text-[9px] tracking-[0.15em] uppercase text-stone-400">Coaching patterns</p>
           {coachSignals.map((s, i) => <SignalCard key={i} signal={s} />)}
+        </div>
+      )}
+
+      {/* Hyrox Benchmarks */}
+      {hyroxBenchmarks && (
+        <div className="flex flex-col gap-3">
+          <p className="text-[9px] tracking-[0.15em] uppercase text-stone-400">Hyrox Benchmarks</p>
+          <div className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 flex flex-col gap-2">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[10px] uppercase tracking-wide text-violet-500 font-semibold capitalize">{hyroxBenchmarks.weightCategory}</p>
+              <p className="text-[9px] text-stone-400">
+                Updated {new Date(hyroxBenchmarks.lastUpdated).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+              </p>
+            </div>
+            {HYROX_STATION_LABELS.map(st => (
+              <div key={st.key} className="flex items-center justify-between">
+                <p className="text-[11px] text-stone-600">{st.label}</p>
+                <p className="text-[11px] font-semibold text-stone-800 tabular-nums">
+                  {st.isReps ? `${hyroxBenchmarks[st.key]} reps` : secsToMmss(hyroxBenchmarks[st.key] as number)}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

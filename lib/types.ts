@@ -59,10 +59,12 @@ export interface WodStation {
   duration?: string;
   load?: string;
   notes?: string;
+  benchmarkSeconds?: number;  // athlete's PB
+  targetSeconds?: number;     // adjusted target for simulation intensity
 }
 
 export interface WodPrescription {
-  format: "for_time" | "amrap" | "emom" | "intervals" | "stations";
+  format: "for_time" | "amrap" | "emom" | "intervals" | "stations" | "hyrox_simulation";
   focus?: "hyrox_conditioning" | "hiit" | "threshold" | "mixed_engine";
   durationCapMin?: number;
   guidance?: string;
@@ -119,6 +121,24 @@ export interface Actual {
   achievements?: number | null;   // PR count
   // Strength logging
   strengthExercises?: StrengthExerciseActual[] | null;
+  // Hyrox simulation
+  hyroxFinishSeconds?: number | null;
+  hyroxSplits?: number[] | null;   // 8 round times
+}
+
+// ─── Hyrox Benchmarks ─────────────────────────────────────────────────────────
+
+export interface HyroxBenchmarks {
+  skiErg: number;           // seconds for 1000m
+  sledPush: number;         // seconds for 50m
+  sledPull: number;         // seconds for 50m
+  burpeeBroadJump: number;  // seconds for 80m
+  rowing: number;           // seconds for 1000m
+  farmersCarry: number;     // seconds for 200m
+  sandbagLunges: number;    // seconds for 100m
+  wallBalls: number;        // reps completed in 2 minutes (or time for 100 reps in seconds)
+  weightCategory: "male" | "female";
+  lastUpdated: string;      // ISO timestamp
 }
 
 // ─── Strength load progression ────────────────────────────────────────────────

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { TrainingBlock, TrainingWeek, Session, Category, Day, Actual, Prescription, SessionChange } from "../lib/types";
 import { computeInsights, InsightSignal } from "../lib/analytics";
+import { isRaceWeek } from "../lib/race";
 import SessionRow from "./SessionRow";
 import SessionDetail from "./SessionDetail";
 import RegenerateWeekModal from "./RegenerateWeekModal";
@@ -313,6 +314,9 @@ export default function PlanView({
 }: Props) {
   const [weekView, setWeekView] = useState<WeekView>(null);
   const [regenerateWeekId, setRegenerateWeekId] = useState<string | null>(null);
+  const [taperLoading, setTaperLoading] = useState(false);
+  const [taperChanges, setTaperChanges] = useState<SessionChange[] | null>(null);
+  const [taperApplying, setTaperApplying] = useState(false);
 
   const trainingSessions = weeks.flatMap(w => w.sessions).filter(s => s.category && s.category !== "Rest");
   const done = trainingSessions.filter(s => s.completed).length;
@@ -393,6 +397,66 @@ export default function PlanView({
           </div>
         )}
       </div>
+
+      {/* Taper suggestion — shown during race week */}
+      {isRaceWeek(eventDate) && activeBlock && currentWeek && (
+        <div className="-mt-2 flex flex-col gap-2">
+          {!taperChanges && (
+            <button
+              onClick={async () => {
+                setTaperLoading(true);
+                try {
+                  const res = await fetch("/api/generate-taper", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ uid, blockId: activeBlock.id, weekId: currentWeek.id }),
+                  });
+                  if (!res.ok) throw new Error("Failed");
+                  const data = await res.json();
+                  setTaperChanges(data.changes ?? []);
+                } catch {
+                  // ignore
+                } finally {
+                  setTaperLoading(false);
+                }
+              }}
+              disabled={taperLoading}
+              className="self-start text-[11px] tracking-[0.1em] uppercase text-emerald-600 hover:text-emerald-800 border border-emerald-200 hover:border-emerald-400 rounded-lg px-4 py-2 transition-colors disabled:opacity-40"
+            >
+              {taperLoading ? "Generating taper…" : "Suggest taper for this week"}
+            </button>
+          )}
+          {taperChanges && taperChanges.length > 0 && (
+            <div className="border border-emerald-100 rounded-xl px-4 py-3 bg-emerald-50 flex flex-col gap-2">
+              <p className="text-[10px] tracking-[0.15em] uppercase text-emerald-600">Taper changes ready</p>
+              <p className="text-[12px] text-stone-600">{taperChanges.length} session{taperChanges.length !== 1 ? "s" : ""} will be volume-reduced by 35%</p>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={async () => {
+                    setTaperApplying(true);
+                    await onApplyChanges(taperChanges, { firstMessage: "Taper week", summary: `Applied taper: reduced volume by 35% across ${taperChanges.length} sessions` });
+                    setTaperChanges(null);
+                    setTaperApplying(false);
+                  }}
+                  disabled={taperApplying}
+                  className="text-[11px] tracking-[0.1em] uppercase text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-4 py-2 transition-colors disabled:opacity-40"
+                >
+                  {taperApplying ? "Applying…" : "Apply taper"}
+                </button>
+                <button
+                  onClick={() => setTaperChanges(null)}
+                  className="text-[11px] tracking-[0.1em] uppercase text-stone-400 hover:text-stone-700 border border-stone-200 rounded-lg px-4 py-2 transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+          {taperChanges && taperChanges.length === 0 && (
+            <p className="text-[12px] text-stone-400">No sessions eligible for taper (all completed or manually modified).</p>
+          )}
+        </div>
+      )}
 
       {/* Insight signals — planning context */}
       {insights.length > 0 && (

@@ -3,17 +3,62 @@ import { NextRequest, NextResponse } from "next/server";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
+interface HyroxBenchmarksBody {
+  skiErg: number;
+  sledPush: number;
+  sledPull: number;
+  burpeeBroadJump: number;
+  rowing: number;
+  farmersCarry: number;
+  sandbagLunges: number;
+  wallBalls: number;
+  weightCategory: "male" | "female";
+  lastUpdated: string;
+}
+
 export async function POST(req: NextRequest) {
-  const { goal, eventDate, weeks, progressContext } = await req.json();
+  const { goal, eventDate, weeks, progressContext, hyroxBenchmarks } = await req.json() as {
+    goal: string;
+    eventDate: string;
+    weeks: number;
+    progressContext?: string;
+    hyroxBenchmarks?: HyroxBenchmarksBody;
+  };
 
   const progressCtx = progressContext ? `\nAthlete history from previous blocks:\n${progressContext}\n\nUse this to calibrate volume, intensity, and session complexity. For example: if run adherence has been low, don't overload with runs; if strength is consistently missed, keep it simple; if pace is improving, you can push tempo targets slightly harder.\n` : "";
+
+  const isHyroxGoal = /hyrox/i.test(goal || "");
+  const hyroxCtx = (hyroxBenchmarks && isHyroxGoal) ? `
+HYROX TRAINING:
+The athlete trains for Hyrox. Include 1-2 Hyrox simulation sessions per block (weeks 3-4 and 5-6 for a 6-week block).
+
+Athlete benchmarks:
+- SkiErg 1000m: ${hyroxBenchmarks.skiErg} seconds
+- Sled Push 50m: ${hyroxBenchmarks.sledPush} seconds
+- Sled Pull 50m: ${hyroxBenchmarks.sledPull} seconds
+- Burpee Broad Jump 80m: ${hyroxBenchmarks.burpeeBroadJump} seconds
+- Rowing 1000m: ${hyroxBenchmarks.rowing} seconds
+- Farmer's Carry 200m: ${hyroxBenchmarks.farmersCarry} seconds
+- Sandbag Lunges 100m: ${hyroxBenchmarks.sandbagLunges} seconds
+- Wall Balls (100 reps): ${hyroxBenchmarks.wallBalls} seconds
+
+For Hyrox simulation sessions use:
+- category: "WOD"
+- format: "hyrox_simulation"
+- durationCapMin: 90
+- guidance: "Full Hyrox simulation — treat as dress rehearsal. Aim for smooth transitions."
+- sections.main.stations: Array of 16 items alternating 1km run + station in race order.
+  For runs: { "movement": "1km Run", "distance": "1000m", "notes": "Target: [run pace]/km" }
+  For stations: { "movement": "[station name]", "distance": "[target]", "targetSeconds": [benchmark * 1.1 rounded], "notes": "..." }
+  Use targetSeconds = Math.round(benchmarkSeconds * 1.1) to account for cumulative fatigue.
+` : "";
 
   const prompt = `You are an expert running and strength coach specialising in Hyrox, hybrid fitness, and endurance events. Generate a ${weeks}-week training plan for an athlete with the following profile:
 
 - Primary goal: ${goal}
 - Event/race date: ${eventDate || "not specified"}
 - Block duration: ${weeks} weeks
-${progressCtx}
+${progressCtx}${hyroxCtx}
 
 Return ONLY a valid JSON object matching the exact structure below. No markdown, no code fences, no explanation.
 

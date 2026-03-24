@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { TrainingBlock, TrainingWeek, Session, SessionChange, CoachSessionLog, IncidentType } from "../lib/types";
+import { TrainingBlock, TrainingWeek, Session, SessionChange, CoachSessionLog, IncidentType, HyroxBenchmarks } from "../lib/types";
 import CoachChat from "./CoachChat";
+import HyroxBenchmarkInput from "./HyroxBenchmarkInput";
 import { signOut } from "firebase/auth";
 import { auth } from "../lib/firebase";
 
@@ -16,9 +17,11 @@ interface Props {
   userName: string;
   telegramChatId: string;
   whatsappPhone: string;
+  hyroxBenchmarks: HyroxBenchmarks | null;
   onApplyChanges: (changes: SessionChange[], meta: { firstMessage: string; summary: string; incidentType?: IncidentType }) => Promise<void>;
   onSaveTelegramChatId: (chatId: string) => Promise<void>;
   onSaveWhatsappPhone: (phone: string) => Promise<void>;
+  onSaveHyroxBenchmarks: (b: HyroxBenchmarks) => Promise<void>;
 }
 
 function daysUntil(dateStr: string): number | null {
@@ -46,7 +49,7 @@ function sessionLabel(session: Session | null): string {
 
 export default function CoachZone({
   activeBlock, weeks, todaySession, eventDate, coachHistory, progressContext, userName,
-  telegramChatId, whatsappPhone, onApplyChanges, onSaveTelegramChatId, onSaveWhatsappPhone,
+  telegramChatId, whatsappPhone, hyroxBenchmarks, onApplyChanges, onSaveTelegramChatId, onSaveWhatsappPhone, onSaveHyroxBenchmarks,
 }: Props) {
   const [showTelegramForm, setShowTelegramForm] = useState(false);
   const [telegramInput, setTelegramInput] = useState("");
@@ -204,6 +207,9 @@ export default function CoachZone({
             + Connect WhatsApp
           </button>
         )}
+
+        {/* Hyrox */}
+        <HyroxBenchmarkInput benchmarks={hyroxBenchmarks} onSave={onSaveHyroxBenchmarks} />
 
       </div>
 

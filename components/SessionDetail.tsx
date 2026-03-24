@@ -20,8 +20,14 @@ const RUN_TYPE: Record<string, string> = {
   easy: "Easy Run", tempo: "Tempo Run", long: "Long Run", intervals: "Intervals",
 };
 const WOD_FORMAT: Record<string, string> = {
-  for_time: "For Time", amrap: "AMRAP", emom: "EMOM", intervals: "Intervals", stations: "Stations",
+  for_time: "For Time", amrap: "AMRAP", emom: "EMOM", intervals: "Intervals", stations: "Stations", hyrox_simulation: "Hyrox Simulation",
 };
+
+function secsToMmss(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 function prescLine(parts: (string | number | null | undefined)[]): string {
   return parts.filter(Boolean).join("  ·  ");
@@ -67,7 +73,7 @@ export default function SessionDetail({ session, blockId, weekId, isToday, strav
     : isStrength
     ? `${strengthP?.focus ? strengthP.focus.charAt(0).toUpperCase() + strengthP.focus.slice(1) + " " : ""}Strength`
     : isWod
-    ? (wodP?.sections?.main?.wodName ?? WOD_FORMAT[wodP?.format ?? ""] ?? "WOD")
+    ? (wodP?.format === "hyrox_simulation" ? "Hyrox Simulation" : (wodP?.sections?.main?.wodName ?? WOD_FORMAT[wodP?.format ?? ""] ?? "WOD"))
     : "Rest";
 
   const WORKOUT_TYPE_LABEL: Record<number, string> = { 1: "race", 2: "long_run", 3: "workout" };
@@ -301,8 +307,62 @@ export default function SessionDetail({ session, blockId, weekId, isToday, strav
         </div>
       )}
 
-      {/* ── WOD ── */}
-      {isWod && (
+      {/* ── WOD — Hyrox Simulation ── */}
+      {isWod && wodP?.format === "hyrox_simulation" && (
+        <div className="flex flex-col gap-3">
+          <div className="flex gap-4">
+            {wodP?.durationCapMin && (
+              <div>
+                <p className="text-[9px] uppercase tracking-[0.15em] text-stone-400 mb-0.5">Cap</p>
+                <p className="text-sm font-semibold">{wodP.durationCapMin} min</p>
+              </div>
+            )}
+            <div>
+              <p className="text-[9px] uppercase tracking-[0.15em] text-stone-400 mb-0.5">Structure</p>
+              <p className="text-sm font-semibold">8 rounds: 1km Run + Station</p>
+            </div>
+          </div>
+          {(wodP?.sections?.main?.stations ?? []).length > 0 && (
+            <div>
+              <p className="text-[9px] uppercase tracking-[0.15em] text-stone-400 mb-2">Rounds</p>
+              <div className="flex flex-col gap-3">
+                {Array.from({ length: 8 }).map((_, roundIdx) => {
+                  const runStation = wodP!.sections.main.stations[roundIdx * 2];
+                  const workStation = wodP!.sections.main.stations[roundIdx * 2 + 1];
+                  if (!runStation && !workStation) return null;
+                  return (
+                    <div key={roundIdx} className="flex flex-col gap-0.5">
+                      <p className="text-[10px] uppercase tracking-[0.1em] text-violet-400">Round {roundIdx + 1}</p>
+                      {runStation && (
+                        <div className="flex items-baseline gap-2 text-sm">
+                          <span className="font-medium text-stone-800">{runStation.movement}</span>
+                          {runStation.distance && <span className="text-stone-500 text-[12px]">{runStation.distance}</span>}
+                          {runStation.notes && <span className="text-stone-400 text-[11px]">@ {runStation.notes}</span>}
+                        </div>
+                      )}
+                      {workStation && (
+                        <div className="flex items-baseline justify-between">
+                          <div className="flex items-baseline gap-2 text-sm">
+                            <span className="font-medium text-stone-800">{workStation.movement}</span>
+                            {workStation.distance && <span className="text-stone-500 text-[12px]">{workStation.distance}</span>}
+                            {workStation.reps && <span className="text-stone-500 text-[12px]">{workStation.reps} reps</span>}
+                          </div>
+                          {workStation.targetSeconds != null && (
+                            <span className="text-[11px] text-violet-500 font-medium">target: {secsToMmss(workStation.targetSeconds)}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── WOD — standard ── */}
+      {isWod && wodP?.format !== "hyrox_simulation" && (
         <div className="flex flex-col gap-3">
           {wodP?.sections?.main?.structure && (
             <p className="text-sm font-medium text-stone-700">{wodP.sections.main.structure}</p>

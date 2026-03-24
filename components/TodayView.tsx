@@ -3,6 +3,7 @@ import { computeInsights } from "../lib/analytics";
 import TodayWorkout from "./TodayWorkout";
 import ActiveBlock from "./ActiveBlock";
 import InsightCard from "./InsightCard";
+import RaceWeekCard from "./RaceWeekCard";
 
 interface Props {
   activeBlock: TrainingBlock | null;
@@ -13,19 +14,28 @@ interface Props {
   goal: string;
   eventDate: string;
   stravaToken?: string;
+  daysToRace: number | null;
   onToggleSession: (blockId: string, weekId: string, sessionId: string, current: boolean) => void;
   onLogActual: (blockId: string, weekId: string, sessionId: string, actual: Actual) => void;
+  onViewBriefing: () => void;
 }
 
 export default function TodayView({
   activeBlock, weeks, currentWeek, todaySession, todayDay, goal, eventDate, stravaToken,
-  onToggleSession, onLogActual,
+  daysToRace, onToggleSession, onLogActual, onViewBriefing,
 }: Props) {
   const insights = computeInsights(weeks, 4);
   const surfacedInsights = insights.filter(s => s.type === "warning").slice(0, 2);
 
   return (
     <>
+      {daysToRace !== null && daysToRace <= 7 && (
+        <RaceWeekCard
+          eventDate={eventDate}
+          activeBlock={activeBlock}
+          onViewBriefing={onViewBriefing}
+        />
+      )}
       <TodayWorkout
         session={todaySession}
         blockId={activeBlock?.id ?? null}

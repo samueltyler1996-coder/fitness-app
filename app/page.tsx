@@ -9,14 +9,16 @@ import { signInWithPopup, signOut, GoogleAuthProvider, onAuthStateChanged, User 
 import { auth, db } from "../lib/firebase";
 import {
   TrainingBlock, TrainingWeek, Session, Category, Day, Actual, Prescription,
-  SessionChange, CoachSessionChange, CoachSessionLog, IncidentType,
+  SessionChange, CoachSessionChange, CoachSessionLog, IncidentType, HyroxBenchmarks,
 } from "../lib/types";
 import { computeBlockSummary, formatProgressContext } from "../lib/analytics";
+import { getDaysToRace } from "../lib/race";
 import BottomNav, { Zone } from "../components/BottomNav";
 import NowZone from "../components/NowZone";
 import BlockZone from "../components/BlockZone";
 import CoachZone from "../components/CoachZone";
 import ProgressZone from "../components/ProgressZone";
+import RaceDayBriefing from "../components/RaceDayBriefing";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -38,6 +40,8 @@ export default function Home() {
   const [whatsappPhone, setWhatsappPhone] = useState("");
   const [expandedBlockData, setExpandedBlockData] = useState<Map<string, TrainingWeek[]>>(new Map());
   const [expandingBlockId, setExpandingBlockId] = useState<string | null>(null);
+  const [hyroxBenchmarks, setHyroxBenchmarks] = useState<HyroxBenchmarks | null>(null);
+  const [showRaceBriefing, setShowRaceBriefing] = useState(false);
 
   const todayISO = new Date().toISOString().split("T")[0];
   const todayDate = new Date(todayISO);
@@ -47,6 +51,8 @@ export default function Home() {
     () => formatProgressContext(completedBlocks, coachHistory),
     [completedBlocks, coachHistory]
   );
+
+  const daysToRace = useMemo(() => getDaysToRace(eventDate), [eventDate]);
 
   const currentWeek = weeks.find(week => {
     const start = new Date(week.startDate);
@@ -232,6 +238,9 @@ export default function Home() {
           setWhatsappPhone(data.whatsappPhone || "");
         }
 
+        const hyroxSnap = await getDoc(doc(db, "users", currentUser.uid, "hyroxBenchmarks", "benchmarks"));
+        if (hyroxSnap.exists()) setHyroxBenchmarks(hyroxSnap.data() as HyroxBenchmarks);
+
         setUser(currentUser);
         await fetchBlockData(currentUser.uid);
       } else {
@@ -251,7 +260,7 @@ export default function Home() {
       const res = await fetch("/api/generate-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goal: goal || "Maintenance", eventDate, weeks: 6, progressContext }),
+        body: JSON.stringify({ goal: goal || "Maintenance", eventDate, weeks: 6, progressContext, hyroxBenchmarks }),
       });
       if (!res.ok) throw new Error("API error");
       generatedPlan = await res.json();
@@ -340,6 +349,12 @@ export default function Home() {
     setWhatsappPhone(phone);
   };
 
+  const handleSaveHyroxBenchmarks = async (benchmarks: HyroxBenchmarks) => {
+    if (!user) return;
+    await setDoc(doc(db, "users", user.uid, "hyroxBenchmarks", "benchmarks"), benchmarks);
+    setHyroxBenchmarks(benchmarks);
+  };
+
   const handleQueueBlock = async (nextGoal: string, numWeeks: number) => {
     if (!user || !activeBlock || queuedBlock) return;
     const activeEnd = new Date(activeBlock.endDate + "T12:00:00");
@@ -374,7 +389,7 @@ export default function Home() {
       const res = await fetch("/api/generate-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goal: queuedBlock.primaryGoal, eventDate, weeks: qBlockWeeks, progressContext }),
+        body: JSON.stringify({ goal: queuedBlock.primaryGoal, eventDate, weeks: qBlockWeeks, progressContext, hyroxBenchmarks }),
       });
       if (!res.ok) throw new Error("API error");
       generatedPlan = await res.json();
@@ -547,6 +562,19 @@ export default function Home() {
   return (
     <div className="max-w-[430px] mx-auto relative">
 
+      {/* Race day briefing modal */}
+      {showRaceBriefing && user && (
+        <RaceDayBriefing
+          eventDate={eventDate}
+          goal={goal}
+          progressContext={progressContext}
+          uid={user.uid}
+          whatsappPhone={whatsappPhone || undefined}
+          telegramChatId={telegramChatId || undefined}
+          onClose={() => setShowRaceBriefing(false)}
+        />
+      )}
+
       {/* NOW zone */}
       <div className={zone !== "now" ? "hidden" : ""}>
         <NowZone
@@ -554,9 +582,12 @@ export default function Home() {
           currentWeek={currentWeek}
           todaySession={todaySession}
           stravaToken={stravaAccessToken ?? undefined}
+          daysToRace={daysToRace}
+          eventDate={eventDate}
           onToggleSession={toggleSession}
           onLogActual={logActual}
           onGoToBlock={() => setZone("block")}
+          onViewBriefing={() => setShowRaceBriefing(true)}
         />
       </div>
 
@@ -605,9 +636,11 @@ export default function Home() {
           userName={user.displayName ?? user.email ?? ""}
           telegramChatId={telegramChatId}
           whatsappPhone={whatsappPhone}
+          hyroxBenchmarks={hyroxBenchmarks}
           onApplyChanges={applyChanges}
           onSaveTelegramChatId={handleSaveTelegramChatId}
           onSaveWhatsappPhone={handleSaveWhatsappPhone}
+          onSaveHyroxBenchmarks={handleSaveHyroxBenchmarks}
         />
       </div>
 
@@ -618,6 +651,7 @@ export default function Home() {
           weeks={weeks}
           completedBlocks={completedBlocks}
           coachHistory={coachHistory}
+          hyroxBenchmarks={hyroxBenchmarks}
         />
       </div>
 
