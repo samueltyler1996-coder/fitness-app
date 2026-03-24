@@ -1,4 +1,4 @@
-import { BlockSummary, CoachSessionLog, IncidentType, TrainingBlock, TrainingWeek } from "./types";
+import { BlockSummary, CoachSessionLog, IncidentType, StrengthLoadProgression, StrengthLogEntry, StrengthPrescription, TrainingBlock, TrainingWeek } from "./types";
 
 const CATS = ["Run", "Strength", "WOD"] as const;
 type Cat = "Run" | "Strength" | "WOD";
@@ -381,6 +381,105 @@ export function computeProgressInsights(
   }
 
   return signals;
+}
+
+// ─── Strength load progression ────────────────────────────────────────────────
+
+// Tries to parse a numeric kg/lb value out of a load string like "60kg" or "80 lbs".
+function parseLoadNumber(load: string | null | undefined): number | null {
+  if (!load) return null;
+  const match = load.match(/(\d+(?:\.\d+)?)/);
+  return match ? parseFloat(match[1]) : null;
+}
+
+export function computeStrengthLoadProgression(weeks: TrainingWeek[]): StrengthLoadProgression[] {
+  // Map from lowercase exercise name → aggregation state
+  const map = new Map<string, {
+    exerciseName: string; // original casing from first encounter
+    totalStrengthSessions: number;
+    loggedSessions: number;
+    entries: StrengthLogEntry[];
+  }>();
+
+  weeks.forEach((week, weekIndex) => {
+    for (const session of week.sessions) {
+      if (session.category !== "Strength" || !session.completed) continue;
+
+      const presc = session.prescription as StrengthPrescription;
+      const mainExercises = presc?.sections?.main ?? [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const actualExercises: any[] = (session.actual as any)?.strengthExercises ?? [];
+
+      for (const ex of mainExercises) {
+        const key = ex.name.trim().toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, { exerciseName: ex.name.trim(), totalStrengthSessions: 0, loggedSessions: 0, entries: [] });
+        }
+        const entry = map.get(key)!;
+        entry.totalStrengthSessions++;
+
+        // Find matching logged actual (case-insensitive name match)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const loggedActual = actualExercises.find(
+          (a: { name?: string }) => typeof a.name === "string" && a.name.trim().toLowerCase() === key
+        );
+
+        const logEntry: StrengthLogEntry = {
+          weekNumber: weekIndex + 1,
+          weekStartDate: week.startDate,
+          sets: loggedActual?.sets ?? null,
+          reps: loggedActual?.reps ?? null,
+          load: loggedActual?.load ?? null,
+          logged: !!loggedActual,
+        };
+
+        if (loggedActual) entry.loggedSessions++;
+        entry.entries.push(logEntry);
+      }
+    }
+  });
+
+  const result: StrengthLoadProgression[] = [];
+
+  for (const [, data] of map) {
+    // Sort entries by weekNumber ascending
+    const sortedEntries = data.entries.slice().sort((a, b) => a.weekNumber - b.weekNumber);
+
+    // Compute trend: compare first and last entries that have a numeric load
+    const numericLoads = sortedEntries
+      .map(e => ({ weekNumber: e.weekNumber, value: parseLoadNumber(e.load ?? null) }))
+      .filter((e): e is { weekNumber: number; value: number } => e.value !== null);
+
+    let trend: "up" | "down" | "flat" | null = null;
+    if (numericLoads.length >= 2) {
+      const first = numericLoads[0].value;
+      const last = numericLoads[numericLoads.length - 1].value;
+      if (last > first) trend = "up";
+      else if (last < first) trend = "down";
+      else trend = "flat";
+    }
+
+    // maxLoad: the highest numeric load string seen
+    let maxLoad: string | null = null;
+    if (numericLoads.length > 0) {
+      const maxValue = Math.max(...numericLoads.map(e => e.value));
+      const maxEntry = sortedEntries.find(e => parseLoadNumber(e.load ?? null) === maxValue);
+      maxLoad = maxEntry?.load ?? null;
+    }
+
+    result.push({
+      exerciseName: data.exerciseName,
+      totalStrengthSessions: data.totalStrengthSessions,
+      loggedSessions: data.loggedSessions,
+      entries: sortedEntries,
+      maxLoad,
+      trend,
+    });
+  }
+
+  // Sort by exerciseName alphabetically
+  result.sort((a, b) => a.exerciseName.localeCompare(b.exerciseName));
+  return result;
 }
 
 // ─── Progress context for AI prompts ─────────────────────────────────────────

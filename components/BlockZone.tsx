@@ -30,6 +30,9 @@ interface Props {
   onQueueBlock: (goal: string, numWeeks: number) => Promise<void>;
   onRemoveQueuedBlock: () => Promise<void>;
   onActivateQueuedBlock: () => Promise<void>;
+  expandedBlockData: Map<string, TrainingWeek[]>;
+  expandingBlockId: string | null;
+  onExpandCompletedBlock: (blockId: string) => void;
 }
 
 export default function BlockZone(props: Props) {

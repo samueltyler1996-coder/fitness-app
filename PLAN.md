@@ -1,6 +1,6 @@
 # Fitness App — Product Plan
 
-_Last updated: 2026-03-22 (session 4)_
+_Last updated: 2026-03-24 (session 5)_
 
 ---
 
@@ -163,44 +163,110 @@ _Goal: close the loop — what the app knows about you should inform what it pre
 - [x] `/api/generate-plan` — receives `progressContext` with explicit calibration instruction: use history to adjust volume, intensity, and session complexity
 - [x] Empty-safe: returns `""` if no completed block summaries exist, all APIs unchanged for new accounts
 
-### Phase I — Deep Drill-Down (Lazy Session Fetch)
+### Phase I — Deep Drill-Down (Lazy Session Fetch) ✓
 _Goal: let the user explore past block data in detail without slowing the main load._
 
-- [ ] Tap a completed block in history → expand to see full week grid + session list
-- [ ] Fetch sessions from completed blocks on demand (not on initial load)
-- [ ] Strength load progression per exercise (if actual data is logged consistently)
+- [x] Tap a completed block in history → expand to see full week grid + session list
+- [x] Fetch sessions from completed blocks on demand (not on initial load) — cached in React state, no re-fetch on collapse/expand
+- [x] `CompletedBlockDetail` component — collapsible weeks, read-only session rows, prescription + actuals summary
+- [x] `StrengthExerciseActual` type + extend `Actual` with `strengthExercises[]`
+- [x] `StrengthLoadProgression` + `StrengthLogEntry` types in `lib/types.ts`
+- [x] `computeStrengthLoadProgression()` in `lib/analytics.ts` — groups exercises across weeks, computes trend
+- [x] Strength progression table rendered inside expanded completed block (exercise × week grid with trend arrow)
 
-### Phase J — Strava Integration
+### Phase J — Strava Integration ✓
 _Goal: auto-populate actual run data from Strava instead of manual logging._
 
-**OAuth flow (Option A — UID as state):**
-- [ ] `GET /api/strava/authorize` — builds Strava OAuth URL with `state=uid`, redirects
-- [ ] `GET /api/strava/callback` — exchanges code for tokens, writes to `users/{uid}/integrations/strava`
-- [ ] Firestore structure: `users/{uid}/integrations/strava` — athleteId, accessToken, refreshToken, expiresAt, scope, connectedAt
+- [x] `GET /api/strava/authorize` — builds Strava OAuth URL with `state=uid`, redirects
+- [x] `GET /api/strava/callback` — exchanges code for tokens, writes to `users/{uid}/integrations/strava`
+- [x] Firestore structure: `users/{uid}/integrations/strava` — athleteId, accessToken, refreshToken, expiresAt, scope, connectedAt
+- [x] `lib/strava.ts` — `getValidAccessToken(uid)` handles 6-hour expiry and refresh automatically
+- [x] `GET /api/strava/activities` — fetches activities for a date range, returns mapped array
+- [x] Match by date (session day X → Strava activities between X 00:00–23:59), filter type === "Run"
+- [x] `computePaceStr()` and `inferEffort()` utilities in `lib/strava.ts`
+- [x] "Connect Strava" button in Block Settings / profile area with connected state display
+- [x] Auto-fill actual in `TodayWorkout`, `SessionDetail`, `NowZone` when opening a Run session — silently checks Strava, pre-fills log input
 
-**Token + activity layer:**
-- [ ] `lib/strava.ts` — `getValidAccessToken(uid)` handles 6-hour expiry and refresh automatically
-- [ ] `GET /api/strava/activities` — fetches activities for a date range, returns mapped array
+### Phase K — Messaging Coach ✓
+_Goal: interact with the coach conversationally on the go via Telegram and WhatsApp._
 
-**Activity → session matching:**
-- [ ] Match by date (session day X → Strava activities between X 00:00–23:59), filter type === "Run"
-- [ ] If multiple: pick closest to `prescription.distanceKm`
-- [ ] Map to `Actual`: distanceKm, pace (computed from moving_time/distance), effort (from HR or perceived_exertion), notes (activity name)
+- [x] `lib/firebase-admin.ts` — server-side Firestore access via service account (base64 JSON)
+- [x] `POST /api/telegram` — Telegram bot webhook: routes messages, YES/NO confirmation, applies changes to Firestore
+- [x] `POST /api/whatsapp` — WhatsApp Cloud API webhook (Meta, free up to 1,000 conversations/month)
+- [x] Phone number / chat ID → Firestore UID mapping on user doc (`whatsappPhone`, `telegramChatId`)
+- [x] Connect Telegram + Connect WhatsApp UI in CoachZone (minimal, both supported)
+- [x] Conversational flow — YES/NO gate removed, pending changes replaced/cleared naturally mid-conversation
+- [x] Changes list — bullet-point summary of each session change before YES/NO prompt
+- [x] Conversation history stored in Firestore (rolling 20 messages, separate per channel)
+- [x] Pending changes stored in Firestore per channel, applied server-side via batch write + coach session log
 
-**UI:**
-- [ ] "Connect Strava" button in Block Settings / profile area
-- [ ] Connected state display (athlete name)
-- [ ] Auto-fill actual in `SessionDetail` when opening a Run session — silently check Strava, pre-fill log input
-- [ ] New env vars: `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `NEXT_PUBLIC_APP_URL`
+### Phase L — Race Week + Race Day Experience
+_Goal: own the emotional peak of the athlete's year — no competitor does this._
 
-### Phase K — WhatsApp Coach
-_Goal: interact with the coach conversationally on the go via WhatsApp, for free._
+- [ ] Detect race week automatically (event date within 7 days)
+- [ ] Race week card on dashboard — taper status, days to race, personalised cues
+- [ ] Race morning briefing: wake time, nutrition timing, warm-up protocol, target splits — generated by AI from goal + block history
+- [ ] Delivered via WhatsApp/Telegram on race morning (uses existing messaging infra)
+- [ ] Race week session modifications: auto-suggest taper (reduced volume, maintained intensity)
 
-- [ ] Twilio free tier or Meta Cloud API (free up to 1,000 conversations/month)
-- [ ] `POST /api/whatsapp` webhook — receives messages, routes to existing handle-incident or adapt-plan
-- [ ] Phone number → Firestore UID mapping on user doc
-- [ ] Human-in-the-loop confirmation via reply keywords (YES/NO to apply proposed changes)
-- [ ] Conversation state in Firestore for pending changes awaiting confirmation
+### Phase M — Post-Race Debrief + Next Block Seeding
+_Goal: capture the most emotionally charged moment of the athlete's year and feed it forward._
+
+- [ ] Trigger debrief when event date passes — proactive WhatsApp/Telegram message: "How did it go?"
+- [ ] Structured debrief conversation: result, how it felt, what worked, what didn't, injury/fatigue status
+- [ ] Debrief stored to Firestore, injected into next block generation as context
+- [ ] "Start next block" flow pre-populated from debrief answers (goal, event date, adjustments)
+
+### Phase N — Hyrox Simulation + Station Benchmarks
+_Goal: own the Hyrox training category — 500k+ athletes, zero dedicated coaching apps._
+
+- [ ] Athlete profile: benchmark times per station (SkiErg 1km, sled push, wall balls, etc.)
+- [ ] "Hyrox Simulation" session type — full 8-station format with correct ordering and transitions
+- [ ] Station benchmark tracking over time — feeds intensity targets in future prescriptions
+- [ ] AI-generated Hyrox simulation prescriptions calibrated to benchmark times
+- [ ] Progress view: per-station improvement across blocks
+
+### Phase O — Predictive Race Time Estimate
+_Goal: answer the question every athlete asks — "am I on track?"_
+
+- [ ] Apply Riegel formula / VDOT model to completed run actuals
+- [ ] Weekly-updated predicted finish time shown on dashboard (with confidence range)
+- [ ] Trend line: predicted time improving/worsening across weeks
+- [ ] Hyrox equivalent: projected total time based on station benchmarks + run pace
+
+### Phase P — Proactive Coach Check-ins
+_Goal: make the app feel alive — an agentic coach that reaches out, not one that waits._
+
+- [ ] Scheduled check-ins via WhatsApp/Telegram (uses existing messaging infra)
+- [ ] "You haven't logged Tuesday's session — did it happen?"
+- [ ] "You've trained hard 4 days in a row — keeping tomorrow easy is a good call"
+- [ ] Weekly summary sent every Sunday: sessions done, km logged, how next week looks
+- [ ] Cron job / scheduled Cloud Function triggers — rule-based logic first, AI synthesis for message text
+
+### Phase Q — Voice Session Logging
+_Goal: remove logging friction — athletes shouldn't have to type post-workout._
+
+- [ ] Web Speech API input on log fields (mobile Chrome/Safari)
+- [ ] Tap mic → speak → transcribed text fed into existing `/api/parse-actual` pipeline
+- [ ] Works in `TodayWorkout`, `SessionDetail`, WhatsApp/Telegram (already text-based)
+
+### Phase R — Training Load Visualisation (ATL/CTL)
+_Goal: give athletes the TrainingPeaks Performance Management Chart without the 2009 UI._
+
+- [ ] Session load scoring: RPE × duration (manual), or HR-based if wearable data available
+- [ ] Acute Training Load (ATL, 7-day rolling) and Chronic Training Load (CTL, 42-day rolling)
+- [ ] Form = CTL − ATL: "fresh", "optimal", "fatigued" zones
+- [ ] Chart in Progress view: ATL/CTL/Form over time, race date marked
+- [ ] Taper detection: form trending positive into race week
+
+### Phase S — Garmin / Apple Health Integration
+_Goal: let real physiological data (HRV, sleep, training readiness) inform the plan._
+
+- [ ] Garmin Connect OAuth flow — access HR, HRV, training load, sleep score
+- [ ] Apple HealthKit integration (iOS) — resting HR, HRV, sleep
+- [ ] Daily readiness signal: if HRV suppressed or sleep poor → suggest session downgrade
+- [ ] Proactive check-in when readiness is low (uses Phase P infrastructure)
+- [ ] Feeds ATL/CTL calculations (Phase R) with device-measured load instead of manual RPE
 
 ---
 

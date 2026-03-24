@@ -7,6 +7,7 @@ import SessionRow from "./SessionRow";
 import SessionDetail from "./SessionDetail";
 import RegenerateWeekModal from "./RegenerateWeekModal";
 import InsightCard from "./InsightCard";
+import CompletedBlockDetail from "./CompletedBlockDetail";
 
 type WeekView =
   | { type: "day"; weekId: string; sessionId: string }
@@ -156,65 +157,108 @@ function QueueBlockForm({ onQueue, suggestedGoal }: { onQueue: (goal: string, nu
   );
 }
 
-function BlockHistory({ blocks, crossBlockInsights }: { blocks: TrainingBlock[]; crossBlockInsights: InsightSignal[] }) {
+function BlockHistory({
+  blocks,
+  crossBlockInsights,
+  expandedBlockData,
+  expandingBlockId,
+  onExpandCompletedBlock,
+}: {
+  blocks: TrainingBlock[];
+  crossBlockInsights: InsightSignal[];
+  expandedBlockData: Map<string, TrainingWeek[]>;
+  expandingBlockId: string | null;
+  onExpandCompletedBlock: (blockId: string) => void;
+}) {
   return (
     <div className="pt-6 border-t border-stone-100 flex flex-col gap-4">
       <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400">History</p>
 
       <div className="flex flex-col gap-3">
-        {blocks.map(block => (
-          <div key={block.id} className="rounded-xl border border-stone-100 bg-stone-50 px-4 py-3">
-            <div className="flex items-start justify-between gap-2 mb-2">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-stone-800 truncate">{block.name}</p>
-                <p className="text-[11px] text-stone-400 mt-0.5">
-                  {formatDateShort(block.startDate)} — {formatDateShort(block.endDate)}
-                </p>
-              </div>
-              {block.summary ? (
-                <div className="text-right shrink-0">
-                  <p className="text-2xl font-black tabular-nums leading-none text-stone-800">
-                    {Math.round(block.summary.completionRate * 100)}%
-                  </p>
-                  <p className="text-[9px] uppercase tracking-wide text-stone-400 mt-0.5">
-                    {block.summary.completedSessions}/{block.summary.totalSessions}
-                  </p>
+        {blocks.map(block => {
+          const isExpanded = expandedBlockData.has(block.id);
+          const isLoading = expandingBlockId === block.id;
+          const expandedWeeks = expandedBlockData.get(block.id);
+
+          return (
+            <div key={block.id} className="rounded-xl border border-stone-100 bg-stone-50">
+              {/* Clickable card header */}
+              <button
+                onClick={() => onExpandCompletedBlock(block.id)}
+                className="w-full text-left px-4 py-3"
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className="text-[10px] text-stone-400 shrink-0">
+                      {isLoading ? "●" : isExpanded ? "▼" : "▶"}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-stone-800 truncate">{block.name}</p>
+                      <p className="text-[11px] text-stone-400 mt-0.5">
+                        {formatDateShort(block.startDate)} — {formatDateShort(block.endDate)}
+                      </p>
+                    </div>
+                  </div>
+                  {block.summary ? (
+                    <div className="text-right shrink-0">
+                      <p className="text-2xl font-black tabular-nums leading-none text-stone-800">
+                        {Math.round(block.summary.completionRate * 100)}%
+                      </p>
+                      <p className="text-[9px] uppercase tracking-wide text-stone-400 mt-0.5">
+                        {block.summary.completedSessions}/{block.summary.totalSessions}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-stone-300 shrink-0">No summary</p>
+                  )}
                 </div>
-              ) : (
-                <p className="text-[11px] text-stone-300 shrink-0">No summary</p>
+
+                {block.summary && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 pl-4">
+                    {block.summary.runAdherence !== undefined && (
+                      <span className="flex items-center gap-1 text-[10px] text-stone-500">
+                        <span className="text-[9px] font-semibold text-stone-400">R</span>
+                        {Math.round(block.summary.runAdherence * 100)}%
+                      </span>
+                    )}
+                    {block.summary.strengthAdherence !== undefined && (
+                      <span className="flex items-center gap-1 text-[10px] text-stone-500">
+                        <span className="text-[9px] font-semibold text-stone-400">S</span>
+                        {Math.round(block.summary.strengthAdherence * 100)}%
+                      </span>
+                    )}
+                    {block.summary.wodAdherence !== undefined && (
+                      <span className="flex items-center gap-1 text-[10px] text-stone-500">
+                        <span className="text-[9px] font-semibold text-stone-400">W</span>
+                        {Math.round(block.summary.wodAdherence * 100)}%
+                      </span>
+                    )}
+                    {(block.summary.incidentCount ?? 0) > 0 && (
+                      <span className="flex items-center gap-1 text-[10px] text-stone-500">
+                        <span className="w-1.5 h-1.5 rounded-full bg-stone-400 inline-block" />
+                        {block.summary.incidentCount} {block.summary.incidentCount === 1 ? "incident" : "incidents"}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </button>
+
+              {/* Loading indicator */}
+              {isLoading && (
+                <div className="px-4 pb-3">
+                  <p className="text-[10px] text-stone-400 animate-pulse">Loading sessions…</p>
+                </div>
+              )}
+
+              {/* Expanded detail */}
+              {isExpanded && expandedWeeks && (
+                <div className="border-t border-stone-100">
+                  <CompletedBlockDetail block={block} weeks={expandedWeeks} />
+                </div>
               )}
             </div>
-
-            {block.summary && (
-              <div className="flex flex-wrap gap-x-3 gap-y-1">
-                {block.summary.runAdherence !== undefined && (
-                  <span className="flex items-center gap-1 text-[10px] text-stone-500">
-                    <span className="text-[9px] font-semibold text-stone-400">R</span>
-                    {Math.round(block.summary.runAdherence * 100)}%
-                  </span>
-                )}
-                {block.summary.strengthAdherence !== undefined && (
-                  <span className="flex items-center gap-1 text-[10px] text-stone-500">
-                    <span className="text-[9px] font-semibold text-stone-400">S</span>
-                    {Math.round(block.summary.strengthAdherence * 100)}%
-                  </span>
-                )}
-                {block.summary.wodAdherence !== undefined && (
-                  <span className="flex items-center gap-1 text-[10px] text-stone-500">
-                    <span className="text-[9px] font-semibold text-stone-400">W</span>
-                    {Math.round(block.summary.wodAdherence * 100)}%
-                  </span>
-                )}
-                {(block.summary.incidentCount ?? 0) > 0 && (
-                  <span className="flex items-center gap-1 text-[10px] text-stone-500">
-                    <span className="w-1.5 h-1.5 rounded-full bg-stone-400 inline-block" />
-                    {block.summary.incidentCount} {block.summary.incidentCount === 1 ? "incident" : "incidents"}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {crossBlockInsights.length > 0 && (
@@ -254,6 +298,9 @@ interface Props {
   onQueueBlock: (goal: string, numWeeks: number) => Promise<void>;
   onRemoveQueuedBlock: () => Promise<void>;
   onActivateQueuedBlock: () => Promise<void>;
+  expandedBlockData: Map<string, TrainingWeek[]>;
+  expandingBlockId: string | null;
+  onExpandCompletedBlock: (blockId: string) => void;
 }
 
 export default function PlanView({
@@ -262,6 +309,7 @@ export default function PlanView({
   onGoalChange, onEventDateChange, onSave, onCreateBlock,
   onToggleSession, onLogActual, onCategoryChange, onEditPrescription, onApplyChanges,
   onQueueBlock, onRemoveQueuedBlock, onActivateQueuedBlock,
+  expandedBlockData, expandingBlockId, onExpandCompletedBlock,
 }: Props) {
   const [weekView, setWeekView] = useState<WeekView>(null);
   const [regenerateWeekId, setRegenerateWeekId] = useState<string | null>(null);
@@ -307,7 +355,7 @@ export default function PlanView({
           {creating ? "Generating plan…" : "Generate Training Block"}
         </button>
 
-        {completedBlocks.length > 0 && <BlockHistory blocks={completedBlocks} crossBlockInsights={crossBlockInsights} />}
+        {completedBlocks.length > 0 && <BlockHistory blocks={completedBlocks} crossBlockInsights={crossBlockInsights} expandedBlockData={expandedBlockData} expandingBlockId={expandingBlockId} onExpandCompletedBlock={onExpandCompletedBlock} />}
       </div>
     );
   }
@@ -608,7 +656,7 @@ export default function PlanView({
         )}
       </div>
 
-      {completedBlocks.length > 0 && <BlockHistory blocks={completedBlocks} crossBlockInsights={crossBlockInsights} />}
+      {completedBlocks.length > 0 && <BlockHistory blocks={completedBlocks} crossBlockInsights={crossBlockInsights} expandedBlockData={expandedBlockData} expandingBlockId={expandingBlockId} onExpandCompletedBlock={onExpandCompletedBlock} />}
 
     </div>
   );

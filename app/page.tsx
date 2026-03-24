@@ -36,6 +36,8 @@ export default function Home() {
   const [stravaAccessToken, setStravaAccessToken] = useState<string | null>(null);
   const [telegramChatId, setTelegramChatId] = useState("");
   const [whatsappPhone, setWhatsappPhone] = useState("");
+  const [expandedBlockData, setExpandedBlockData] = useState<Map<string, TrainingWeek[]>>(new Map());
+  const [expandingBlockId, setExpandingBlockId] = useState<string | null>(null);
 
   const todayISO = new Date().toISOString().split("T")[0];
   const todayDate = new Date(todayISO);
@@ -111,6 +113,62 @@ export default function Home() {
     const historySnap = await getDocs(historyQuery);
     setCoachHistory(historySnap.docs.map(d => ({ id: d.id, ...d.data() } as CoachSessionLog)));
   }, []);
+
+  const fetchCompletedBlockDetail = useCallback(async (uid: string, blockId: string): Promise<TrainingWeek[]> => {
+    const weeksRef = collection(db, "users", uid, "trainingBlocks", blockId, "trainingWeeks");
+    const weeksSnapshot = await getDocs(query(weeksRef, orderBy("startDate", "asc")));
+
+    const weeksData: TrainingWeek[] = [];
+
+    for (const weekDoc of weeksSnapshot.docs) {
+      const sessionsRef = collection(db, "users", uid, "trainingBlocks", blockId, "trainingWeeks", weekDoc.id, "sessions");
+      const sessionsSnapshot = await getDocs(sessionsRef);
+
+      const weekStartDate = (weekDoc.data() as TrainingWeek).startDate;
+      const getOffset = (day: string) => {
+        const start = new Date(weekStartDate + "T12:00:00");
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(start);
+          d.setDate(start.getDate() + i);
+          if (DAY_NAMES[d.getDay()] === day) return i;
+        }
+        return 0;
+      };
+
+      const sessions: Session[] = sessionsSnapshot.docs
+        .map(s => ({ id: s.id, ...s.data() } as Session))
+        .sort((a, b) => getOffset(a.day) - getOffset(b.day));
+
+      weeksData.push({ id: weekDoc.id, ...weekDoc.data(), sessions } as TrainingWeek);
+    }
+
+    return weeksData;
+  }, []);
+
+  const handleExpandCompletedBlock = useCallback(async (blockId: string) => {
+    if (!user) return;
+
+    // Toggle collapse if already expanded
+    if (expandedBlockData.has(blockId)) {
+      setExpandedBlockData(prev => {
+        const next = new Map(prev);
+        next.delete(blockId);
+        return next;
+      });
+      return;
+    }
+
+    // Already loading
+    if (expandingBlockId === blockId) return;
+
+    setExpandingBlockId(blockId);
+    try {
+      const weeksData = await fetchCompletedBlockDetail(user.uid, blockId);
+      setExpandedBlockData(prev => new Map(prev).set(blockId, weeksData));
+    } finally {
+      setExpandingBlockId(null);
+    }
+  }, [user, expandedBlockData, expandingBlockId, fetchCompletedBlockDetail]);
 
   // Strava OAuth callback + load existing connection
   useEffect(() => {
@@ -529,6 +587,9 @@ export default function Home() {
           onQueueBlock={handleQueueBlock}
           onRemoveQueuedBlock={handleRemoveQueuedBlock}
           onActivateQueuedBlock={handleActivateQueuedBlock}
+          expandedBlockData={expandedBlockData}
+          expandingBlockId={expandingBlockId}
+          onExpandCompletedBlock={handleExpandCompletedBlock}
         />
       </div>
 

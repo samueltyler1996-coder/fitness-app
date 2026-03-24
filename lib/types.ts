@@ -96,6 +96,15 @@ export type Prescription = RunPrescription | StrengthPrescription | WodPrescript
 
 // ─── Actual ───────────────────────────────────────────────────────────────────
 
+export interface StrengthExerciseActual {
+  name: string;
+  sets?: number;
+  reps?: number | string;
+  load?: string;
+  effort?: string;
+  notes?: string;
+}
+
 export interface Actual {
   distanceKm?: number | null;
   pace?: string | null;
@@ -108,6 +117,28 @@ export interface Actual {
   sufferScore?: number | null;
   workoutType?: string | null;    // "race" | "long_run" | "workout"
   achievements?: number | null;   // PR count
+  // Strength logging
+  strengthExercises?: StrengthExerciseActual[] | null;
+}
+
+// ─── Strength load progression ────────────────────────────────────────────────
+
+export interface StrengthLogEntry {
+  weekNumber: number;
+  weekStartDate: string;
+  sets: number | null;
+  reps: number | string | null;
+  load?: string | null;
+  logged: boolean;
+}
+
+export interface StrengthLoadProgression {
+  exerciseName: string;
+  totalStrengthSessions: number;
+  loggedSessions: number;
+  entries: StrengthLogEntry[];
+  maxLoad?: string | null;
+  trend: "up" | "down" | "flat" | null;
 }
 
 // ─── Session ──────────────────────────────────────────────────────────────────
