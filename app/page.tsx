@@ -238,8 +238,12 @@ export default function Home() {
           setWhatsappPhone(data.whatsappPhone || "");
         }
 
-        const hyroxSnap = await getDoc(doc(db, "users", currentUser.uid, "hyroxBenchmarks", "benchmarks"));
-        if (hyroxSnap.exists()) setHyroxBenchmarks(hyroxSnap.data() as HyroxBenchmarks);
+        try {
+          const hyroxSnap = await getDoc(doc(db, "users", currentUser.uid, "hyroxBenchmarks", "benchmarks"));
+          if (hyroxSnap.exists()) setHyroxBenchmarks(hyroxSnap.data() as HyroxBenchmarks);
+        } catch {
+          // Firestore rules may not yet cover this path — non-fatal
+        }
 
         setUser(currentUser);
         await fetchBlockData(currentUser.uid);
