@@ -67,7 +67,37 @@ export default function ProgressView({ completedBlocks, coachHistory, hyroxBench
     return (
       <div className="flex flex-col gap-4 pt-4">
         <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400">Progress</p>
-        <p className="text-sm text-stone-400">Complete your first training block to start seeing progress trends here.</p>
+        {(racePredictions?.riegel || racePredictions?.hyrox) && (
+          <div className="flex flex-col gap-3">
+            <p className="text-[9px] tracking-[0.15em] uppercase text-stone-400">Race Prediction</p>
+            {racePredictions.riegel && <RacePredictionCard prediction={racePredictions.riegel} />}
+            {racePredictions.hyrox && <HyroxPredictionCard prediction={racePredictions.hyrox} />}
+          </div>
+        )}
+        {hyroxBenchmarks && (
+          <div className="flex flex-col gap-3">
+            <p className="text-[9px] tracking-[0.15em] uppercase text-stone-400">Hyrox Benchmarks</p>
+            <div className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[10px] uppercase tracking-wide text-violet-500 font-semibold capitalize">{hyroxBenchmarks.weightCategory}</p>
+                <p className="text-[9px] text-stone-400">
+                  Updated {new Date(hyroxBenchmarks.lastUpdated).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                </p>
+              </div>
+              {HYROX_STATION_LABELS.map(st => (
+                <div key={st.key} className="flex items-center justify-between">
+                  <p className="text-[11px] text-stone-600">{st.label}</p>
+                  <p className="text-[11px] font-semibold text-stone-800 tabular-nums">
+                    {st.isReps ? `${hyroxBenchmarks[st.key]} reps` : secsToMmss(hyroxBenchmarks[st.key] as number)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {!racePredictions?.riegel && !racePredictions?.hyrox && !hyroxBenchmarks && (
+          <p className="text-sm text-stone-400">Complete your first training block to start seeing progress trends here.</p>
+        )}
       </div>
     );
   }
