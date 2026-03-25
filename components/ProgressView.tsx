@@ -60,6 +60,17 @@ const HYROX_STATION_LABELS: { key: keyof Omit<HyroxBenchmarks, "weightCategory" 
   { key: "wallBalls",       label: "Wall Balls (reps/2min)", isReps: true  },
 ];
 
+function RacePredictionPlaceholder() {
+  return (
+    <div className="rounded-xl border border-stone-100 bg-stone-50 px-4 py-4 flex flex-col gap-1.5">
+      <p className="text-sm font-semibold text-stone-500">No prediction yet</p>
+      <p className="text-[11px] text-stone-400">
+        Log runs with distance and pace to unlock your predicted race time. 3 runs gives a reliable estimate.
+      </p>
+    </div>
+  );
+}
+
 export default function ProgressView({ completedBlocks, coachHistory, hyroxBenchmarks, racePredictions }: Props) {
   const withSummary = completedBlocks.filter(b => b.summary);
 
@@ -67,13 +78,14 @@ export default function ProgressView({ completedBlocks, coachHistory, hyroxBench
     return (
       <div className="flex flex-col gap-4 pt-4">
         <p className="text-[10px] tracking-[0.2em] uppercase text-stone-400">Progress</p>
-        {(racePredictions?.riegel || racePredictions?.hyrox) && (
-          <div className="flex flex-col gap-3">
-            <p className="text-[9px] tracking-[0.15em] uppercase text-stone-400">Race Prediction</p>
-            {racePredictions.riegel && <RacePredictionCard prediction={racePredictions.riegel} />}
-            {racePredictions.hyrox && <HyroxPredictionCard prediction={racePredictions.hyrox} />}
-          </div>
-        )}
+        <div className="flex flex-col gap-3">
+          <p className="text-[9px] tracking-[0.15em] uppercase text-stone-400">Race Prediction</p>
+          {racePredictions?.riegel
+            ? <RacePredictionCard prediction={racePredictions.riegel} />
+            : <RacePredictionPlaceholder />
+          }
+          {racePredictions?.hyrox && <HyroxPredictionCard prediction={racePredictions.hyrox} />}
+        </div>
         {hyroxBenchmarks && (
           <div className="flex flex-col gap-3">
             <p className="text-[9px] tracking-[0.15em] uppercase text-stone-400">Hyrox Benchmarks</p>
@@ -206,13 +218,14 @@ export default function ProgressView({ completedBlocks, coachHistory, hyroxBench
       )}
 
       {/* Race Predictions */}
-      {(racePredictions?.riegel || racePredictions?.hyrox) && (
-        <div className="flex flex-col gap-3">
-          <p className="text-[9px] tracking-[0.15em] uppercase text-stone-400">Race Prediction</p>
-          {racePredictions.riegel && <RacePredictionCard prediction={racePredictions.riegel} />}
-          {racePredictions.hyrox && <HyroxPredictionCard prediction={racePredictions.hyrox} />}
-        </div>
-      )}
+      <div className="flex flex-col gap-3">
+        <p className="text-[9px] tracking-[0.15em] uppercase text-stone-400">Race Prediction</p>
+        {racePredictions?.riegel
+          ? <RacePredictionCard prediction={racePredictions.riegel} />
+          : <RacePredictionPlaceholder />
+        }
+        {racePredictions?.hyrox && <HyroxPredictionCard prediction={racePredictions.hyrox} />}
+      </div>
 
       {/* Hyrox Benchmarks */}
       {hyroxBenchmarks && (
