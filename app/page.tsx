@@ -11,7 +11,8 @@ import {
   TrainingBlock, TrainingWeek, Session, Category, Day, Actual, Prescription,
   SessionChange, CoachSessionChange, CoachSessionLog, IncidentType, HyroxBenchmarks,
 } from "../lib/types";
-import { computeBlockSummary, formatProgressContext } from "../lib/analytics";
+import { computeBlockSummary, formatProgressContext, computeRacePredictions } from "../lib/analytics";
+import { RaceTimePredictions } from "../lib/types";
 import { getDaysToRace } from "../lib/race";
 import BottomNav, { Zone } from "../components/BottomNav";
 import NowZone from "../components/NowZone";
@@ -53,6 +54,11 @@ export default function Home() {
   );
 
   const daysToRace = useMemo(() => getDaysToRace(eventDate), [eventDate]);
+
+  const racePredictions = useMemo<RaceTimePredictions>(() => {
+    if (!weeks.length || !goal) return {};
+    return computeRacePredictions(weeks, goal, hyroxBenchmarks);
+  }, [weeks, goal, hyroxBenchmarks]);
 
   const currentWeek = weeks.find(week => {
     const start = new Date(week.startDate);
@@ -588,6 +594,7 @@ export default function Home() {
           stravaToken={stravaAccessToken ?? undefined}
           daysToRace={daysToRace}
           eventDate={eventDate}
+          racePredictions={racePredictions}
           onToggleSession={toggleSession}
           onLogActual={logActual}
           onGoToBlock={() => setZone("block")}
@@ -656,6 +663,7 @@ export default function Home() {
           completedBlocks={completedBlocks}
           coachHistory={coachHistory}
           hyroxBenchmarks={hyroxBenchmarks}
+          racePredictions={racePredictions}
         />
       </div>
 

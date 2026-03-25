@@ -3,10 +3,11 @@
 import { useState, useEffect } from "react";
 import {
   Session, TrainingBlock, TrainingWeek, Actual,
-  RunPrescription, StrengthPrescription, WodPrescription,
+  RunPrescription, StrengthPrescription, WodPrescription, RaceTimePredictions,
 } from "../lib/types";
 import { StravaActivity, computePaceStr, inferEffort } from "../lib/strava";
 import RaceWeekCard from "./RaceWeekCard";
+import RacePredictionPanel from "./RacePredictionPanel";
 
 interface Props {
   activeBlock: TrainingBlock | null;
@@ -15,6 +16,7 @@ interface Props {
   stravaToken?: string;
   daysToRace?: number | null;
   eventDate?: string;
+  racePredictions?: RaceTimePredictions;
   onToggleSession: (blockId: string, weekId: string, sessionId: string, current: boolean) => void;
   onLogActual: (blockId: string, weekId: string, sessionId: string, actual: Actual) => void;
   onGoToBlock: () => void;
@@ -40,7 +42,7 @@ const WORKOUT_TYPE_LABEL: Record<number, string> = { 1: "race", 2: "long_run", 3
 
 export default function NowZone({
   activeBlock, currentWeek, todaySession, stravaToken,
-  daysToRace, eventDate,
+  daysToRace, eventDate, racePredictions,
   onToggleSession, onLogActual, onGoToBlock, onViewBriefing,
 }: Props) {
   const [logText, setLogText] = useState("");
@@ -81,6 +83,11 @@ export default function NowZone({
         {daysToRace !== null && daysToRace !== undefined && daysToRace <= 7 && eventDate && (
           <RaceWeekCard eventDate={eventDate} activeBlock={activeBlock} onViewBriefing={onViewBriefing ?? (() => {})} />
         )}
+        {daysToRace !== null && daysToRace !== undefined && daysToRace <= 7 && racePredictions?.riegel && (
+          <div className="mt-2">
+            <RacePredictionPanel prediction={racePredictions.riegel} />
+          </div>
+        )}
         <div className="flex-1 flex flex-col justify-center gap-6">
           <p
             className="font-display font-black text-stone-700 leading-none tracking-tight"
@@ -106,6 +113,11 @@ export default function NowZone({
         <p className="text-[10px] tracking-[0.25em] uppercase text-stone-600 mb-10">{dayLabel}</p>
         {daysToRace !== null && daysToRace !== undefined && daysToRace <= 7 && eventDate && (
           <RaceWeekCard eventDate={eventDate} activeBlock={activeBlock} onViewBriefing={onViewBriefing ?? (() => {})} />
+        )}
+        {daysToRace !== null && daysToRace !== undefined && daysToRace <= 7 && racePredictions?.riegel && (
+          <div className="mt-2">
+            <RacePredictionPanel prediction={racePredictions.riegel} />
+          </div>
         )}
         <div className="flex-1 flex flex-col justify-center">
           <p
@@ -220,6 +232,11 @@ export default function NowZone({
       {/* Race week card */}
       {daysToRace !== null && daysToRace !== undefined && daysToRace <= 7 && eventDate && (
         <RaceWeekCard eventDate={eventDate} activeBlock={activeBlock} onViewBriefing={onViewBriefing ?? (() => {})} />
+      )}
+      {daysToRace !== null && daysToRace !== undefined && daysToRace <= 7 && racePredictions?.riegel && (
+        <div className="mt-2">
+          <RacePredictionPanel prediction={racePredictions.riegel} />
+        </div>
       )}
 
       {/* Session headline */}

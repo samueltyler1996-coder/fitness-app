@@ -208,6 +208,39 @@ export interface TrainingBlock {
   summary?: BlockSummary;       // written when status → "completed", absent on active/queued
 }
 
+// ─── Race time predictions ────────────────────────────────────────────────────
+
+export interface RunActual {
+  distanceKm: number;
+  paceSecs: number;       // seconds per km
+  effort?: "easy" | "moderate" | "hard" | null;
+  date: string;           // week startDate (used for recency sorting)
+}
+
+export interface RiegelPrediction {
+  predictedTimeSecs: number;
+  confidenceLevel: "high" | "medium" | "low";
+  confidenceRangeMinutes: number;   // ±X minutes
+  sampleSize: number;
+  averageDistanceKm: number;
+  averagePaceSecs: number;          // seconds per km
+}
+
+export interface HyroxTimePrediction {
+  projectedTimeSecs: number;
+  runComponentSecs: number;         // 8 × 1km
+  stationComponentSecs: number;
+  oneKmPaceSecs: number;
+  benchmarksUsed: number;
+  confidenceLevel: "high" | "medium" | "low";
+  confidenceRangeMinutes: number;
+}
+
+export interface RaceTimePredictions {
+  riegel?: RiegelPrediction;
+  hyrox?: HyroxTimePrediction;
+}
+
 // ─── Coach ────────────────────────────────────────────────────────────────────
 
 export interface SessionChange {

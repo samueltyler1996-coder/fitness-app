@@ -1,12 +1,15 @@
 "use client";
 
-import { TrainingBlock, CoachSessionLog, HyroxBenchmarks } from "../lib/types";
+import { TrainingBlock, CoachSessionLog, HyroxBenchmarks, RaceTimePredictions } from "../lib/types";
 import { computeProgressInsights, secsTopace, ProgressSignal } from "../lib/analytics";
+import RacePredictionCard from "./RacePredictionCard";
+import HyroxPredictionCard from "./HyroxPredictionCard";
 
 interface Props {
   completedBlocks: TrainingBlock[];
   coachHistory: CoachSessionLog[];
   hyroxBenchmarks: HyroxBenchmarks | null;
+  racePredictions?: RaceTimePredictions;
 }
 
 const CATEGORY_COLORS: Record<ProgressSignal["category"], string> = {
@@ -57,7 +60,7 @@ const HYROX_STATION_LABELS: { key: keyof Omit<HyroxBenchmarks, "weightCategory" 
   { key: "wallBalls",       label: "Wall Balls (reps/2min)", isReps: true  },
 ];
 
-export default function ProgressView({ completedBlocks, coachHistory, hyroxBenchmarks }: Props) {
+export default function ProgressView({ completedBlocks, coachHistory, hyroxBenchmarks, racePredictions }: Props) {
   const withSummary = completedBlocks.filter(b => b.summary);
 
   if (withSummary.length === 0) {
@@ -169,6 +172,15 @@ export default function ProgressView({ completedBlocks, coachHistory, hyroxBench
         <div className="flex flex-col gap-3">
           <p className="text-[9px] tracking-[0.15em] uppercase text-stone-400">Coaching patterns</p>
           {coachSignals.map((s, i) => <SignalCard key={i} signal={s} />)}
+        </div>
+      )}
+
+      {/* Race Predictions */}
+      {(racePredictions?.riegel || racePredictions?.hyrox) && (
+        <div className="flex flex-col gap-3">
+          <p className="text-[9px] tracking-[0.15em] uppercase text-stone-400">Race Prediction</p>
+          {racePredictions.riegel && <RacePredictionCard prediction={racePredictions.riegel} />}
+          {racePredictions.hyrox && <HyroxPredictionCard prediction={racePredictions.hyrox} />}
         </div>
       )}
 

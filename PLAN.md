@@ -226,13 +226,13 @@ _Goal: own the Hyrox training category — 500k+ athletes, zero dedicated coachi
 - [x] AI-calibrated prescriptions: when goal contains "hyrox" and benchmarks are set, `generate-plan` appends station targets at `benchmark × 1.1`
 - [x] Progress view: read-only benchmark display (violet-themed) with `lastUpdated`
 
-### Phase O — Predictive Race Time Estimate
+### Phase O — Predictive Race Time Estimate ✓
 _Goal: answer the question every athlete asks — "am I on track?"_
 
-- [ ] Apply Riegel formula / VDOT model to completed run actuals
-- [ ] Weekly-updated predicted finish time shown on dashboard (with confidence range)
-- [ ] Trend line: predicted time improving/worsening across weeks
-- [ ] Hyrox equivalent: projected total time based on station benchmarks + run pace
+- [x] Apply Riegel formula / VDOT model to completed run actuals — `predictRaceTimeRiegel()` in `lib/analytics.ts`, uses 3 longest runs
+- [x] Weekly-updated predicted finish time shown on dashboard (with confidence range) — `RacePredictionPanel` in NowZone during race week, `RacePredictionCard` in ProgressView
+- [ ] Trend line: predicted time improving/worsening across weeks — deferred
+- [x] Hyrox equivalent: projected total time based on station benchmarks + run pace — `HyroxPredictionCard`, `predictHyroxTime()` (8 × 1km + station sum)
 
 ### Phase P — Proactive Coach Check-ins
 _Goal: make the app feel alive — an agentic coach that reaches out, not one that waits._

@@ -1,4 +1,4 @@
-import { BlockSummary, CoachSessionLog, IncidentType, StrengthLoadProgression, StrengthLogEntry, StrengthPrescription, TrainingBlock, TrainingWeek } from "./types";
+import { BlockSummary, CoachSessionLog, HyroxBenchmarks, HyroxTimePrediction, IncidentType, RaceTimePredictions, RiegelPrediction, RunActual, StrengthLoadProgression, StrengthLogEntry, StrengthPrescription, TrainingBlock, TrainingWeek } from "./types";
 
 const CATS = ["Run", "Strength", "WOD"] as const;
 type Cat = "Run" | "Strength" | "WOD";
@@ -479,6 +479,112 @@ export function computeStrengthLoadProgression(weeks: TrainingWeek[]): StrengthL
 
   // Sort by exerciseName alphabetically
   result.sort((a, b) => a.exerciseName.localeCompare(b.exerciseName));
+  return result;
+}
+
+// ─── Race time predictions (Phase O) ─────────────────────────────────────────
+
+/** Extracts completed run actuals from all weeks. Filters out sessions without valid distance (≥0.5 km) and parseable pace. */
+export function extractRunActuals(weeks: TrainingWeek[]): RunActual[] {
+  const runs: RunActual[] = [];
+  for (const week of weeks) {
+    for (const session of week.sessions ?? []) {
+      if (session.category !== "Run" || !session.completed) continue;
+      const dist = (session.actual as any)?.distanceKm;
+      const pace = (session.actual as any)?.pace;
+      if (!dist || typeof dist !== "number" || dist < 0.5) continue;
+      const paceSecs = parsePaceToSecs(pace);
+      if (!paceSecs || paceSecs <= 0) continue;
+      runs.push({
+        distanceKm: dist,
+        paceSecs,
+        effort: (session.actual as any)?.effort ?? null,
+        date: week.startDate,
+      });
+    }
+  }
+  return runs;
+}
+
+/** Infers race distance in km from goal string keywords. Supports marathon (42.195), half (21.0975), 10k, 5k. Returns null for Hyrox goals or unrecognised distances. */
+export function inferRaceDistanceKm(goal: string): number | null {
+  const g = goal.toLowerCase();
+  if (g.includes("marathon") && !g.includes("half")) return 42.195;
+  if (g.includes("half") || g.includes("21.1") || g.includes("21k")) return 21.0975;
+  if (g.includes("10k") || g.includes("10 k")) return 10;
+  if (g.includes("5k") || g.includes("5 k")) return 5;
+  return null;
+}
+
+/**
+ * Riegel formula: predicted pace = avgPace × (targetDist / avgDist)^0.06
+ * Uses the 3 longest logged runs. Confidence: high (3+ runs ±3%), medium (2 ±5%), low (1 ±8%).
+ * Returns null if insufficient data or if the result is non-finite.
+ */
+export function predictRaceTimeRiegel(
+  runs: RunActual[],
+  targetDistanceKm: number,
+): RiegelPrediction | null {
+  if (!runs.length || targetDistanceKm <= 0) return null;
+  const sorted = [...runs].sort((a, b) => b.distanceKm - a.distanceKm);
+  const selected = sorted.slice(0, Math.min(3, sorted.length));
+  const avgDistanceKm = selected.reduce((s, r) => s + r.distanceKm, 0) / selected.length;
+  const avgPaceSecs = selected.reduce((s, r) => s + r.paceSecs, 0) / selected.length;
+  // Riegel: predicted pace = avg pace × (D2/D1)^0.06
+  if (avgDistanceKm <= 0) return null;
+  const predictedPaceSecs = avgPaceSecs * Math.pow(targetDistanceKm / avgDistanceKm, 0.06);
+  const predictedTimeSecs = predictedPaceSecs * targetDistanceKm;
+  if (!isFinite(predictedTimeSecs) || predictedTimeSecs <= 0) return null;
+  const confidenceLevel: "high" | "medium" | "low" =
+    runs.length >= 3 ? "high" : runs.length === 2 ? "medium" : "low";
+  const confidencePct = confidenceLevel === "high" ? 0.03 : confidenceLevel === "medium" ? 0.05 : 0.08;
+  const confidenceRangeMinutes = Math.max(1, Math.round((predictedTimeSecs * confidencePct) / 60));
+  return { predictedTimeSecs, confidenceLevel, confidenceRangeMinutes, sampleSize: runs.length, averageDistanceKm: avgDistanceKm, averagePaceSecs: avgPaceSecs };
+}
+
+/**
+ * Hyrox projection: total = (8 × 1km pace) + sum of station benchmarks.
+ * 1km pace derived from 3 most recent runs (recency matters more than distance for Hyrox).
+ * Requires ≥6 of 8 station benchmarks. Returns null if insufficient data.
+ */
+export function predictHyroxTime(
+  benchmarks: HyroxBenchmarks,
+  runs: RunActual[],
+): HyroxTimePrediction | null {
+  if (!runs.length) return null;
+  const sorted = [...runs].sort((a, b) => b.date.localeCompare(a.date));
+  const selected = sorted.slice(0, Math.min(3, sorted.length));
+  const oneKmPaceSecs = selected.reduce((s, r) => s + r.paceSecs, 0) / selected.length;
+  const runComponentSecs = oneKmPaceSecs * 8;
+  const stationKeys: (keyof HyroxBenchmarks)[] = ["skiErg","sledPush","sledPull","burpeeBroadJump","rowing","farmersCarry","sandbagLunges","wallBalls"];
+  const stationTimes = stationKeys.map(k => benchmarks[k] as number).filter(v => typeof v === "number" && v > 0);
+  if (stationTimes.length < 6) return null;
+  const stationComponentSecs = stationTimes.reduce((s, v) => s + v, 0);
+  const projectedTimeSecs = runComponentSecs + stationComponentSecs;
+  if (!isFinite(projectedTimeSecs) || projectedTimeSecs <= 0) return null;
+  const confidenceLevel: "high" | "medium" | "low" =
+    stationTimes.length === 8 && runs.length >= 3 ? "high" : stationTimes.length >= 6 ? "medium" : "low";
+  const confidencePct = confidenceLevel === "high" ? 0.05 : 0.1;
+  const confidenceRangeMinutes = Math.max(1, Math.round((projectedTimeSecs * confidencePct) / 60));
+  return { projectedTimeSecs, runComponentSecs, stationComponentSecs, oneKmPaceSecs, benchmarksUsed: stationTimes.length, confidenceLevel, confidenceRangeMinutes };
+}
+
+export function computeRacePredictions(
+  weeks: TrainingWeek[],
+  goal: string,
+  hyroxBenchmarks?: HyroxBenchmarks | null,
+): RaceTimePredictions {
+  const runs = extractRunActuals(weeks);
+  const result: RaceTimePredictions = {};
+  const targetDist = inferRaceDistanceKm(goal);
+  if (targetDist && runs.length >= 1) {
+    const riegel = predictRaceTimeRiegel(runs, targetDist);
+    if (riegel) result.riegel = riegel;
+  }
+  if (hyroxBenchmarks && runs.length >= 1) {
+    const hyrox = predictHyroxTime(hyroxBenchmarks, runs);
+    if (hyrox) result.hyrox = hyrox;
+  }
   return result;
 }
 
