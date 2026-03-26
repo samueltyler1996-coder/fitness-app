@@ -644,6 +644,7 @@ export default function Home() {
           eventDate={eventDate}
           coachHistory={coachHistory}
           progressContext={progressContext}
+          goal={goal}
           userName={user.displayName ?? user.email ?? ""}
           telegramChatId={telegramChatId}
           whatsappPhone={whatsappPhone}

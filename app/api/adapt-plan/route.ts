@@ -1,10 +1,11 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
+import { getCoachKnowledge } from "../../../lib/coachKnowledge";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export async function POST(req: NextRequest) {
-  const { messages, currentChanges, weeks, coachHistory, insights, progressContext } = await req.json();
+  const { messages, currentChanges, weeks, coachHistory, insights, progressContext, goal } = await req.json();
 
   const today = new Date(new Date().toISOString().split("T")[0]);
   const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -72,7 +73,15 @@ export async function POST(req: NextRequest) {
 
   const progressCtx = progressContext ? `${progressContext}\n\n` : "";
 
+  // Inject domain knowledge relevant to the last athlete message
+  const lastMessage = messages.filter((m: any) => m.role === "user").slice(-1)[0]?.content ?? "";
+  const isHyrox = typeof goal === "string" && /hyrox/i.test(goal);
+  const knowledgeCtx = getCoachKnowledge(lastMessage, isHyrox);
+
   const prompt = `You are an adaptive running and fitness coach having a conversation with an athlete about adjusting their training plan.
+
+## Coaching Knowledge (use to inform your response)
+${knowledgeCtx}
 
 ${progressCtx}${historyContext}${insightsContext}Here is the conversation so far:
 

@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "../../../lib/firebase-admin";
 import { formatProgressContext } from "../../../lib/analytics";
 import { TrainingBlock, TrainingWeek, Session, SessionChange, CoachSessionChange, CoachSessionLog } from "../../../lib/types";
+import { getCoachKnowledge } from "../../../lib/coachKnowledge";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -108,7 +109,8 @@ export async function POST(req: NextRequest) {
   const updatedConversation: ConversationMessage[] = [...conversation, { role: "user", content: text }];
 
   // Call AI
-  const aiResponse = await callAdaptPlan(updatedConversation, weeks, coachHistory, progressContext);
+  const userGoal = userData.currentGoal ?? "";
+  const aiResponse = await callAdaptPlan(updatedConversation, weeks, coachHistory, progressContext, userGoal);
 
   const finalConversation: ConversationMessage[] = [
     ...updatedConversation,
@@ -239,6 +241,7 @@ async function callAdaptPlan(
   weeks: TrainingWeek[],
   coachHistory: CoachSessionLog[],
   progressContext: string,
+  goal: string,
 ): Promise<{ summary: string; changes: SessionChange[] }> {
   const today = new Date(new Date().toISOString().split("T")[0]);
 
@@ -275,7 +278,15 @@ async function callAdaptPlan(
 
   const progressCtx = progressContext ? `${progressContext}\n\n` : "";
 
+  const lastUserMessage = conversation.filter(m => m.role === "user").slice(-1)[0]?.content ?? "";
+  const isHyrox = /hyrox/i.test(goal);
+  const knowledgeCtx = getCoachKnowledge(lastUserMessage, isHyrox);
+
   const prompt = `You are an adaptive running and fitness coach. This conversation is via WhatsApp — keep replies concise (2 sentences max).
+
+## Coaching Knowledge (use to inform your response)
+${knowledgeCtx}
+
 
 ${progressCtx}${historyContext}Conversation:
 ${conversationHistory}

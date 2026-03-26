@@ -11,6 +11,7 @@ interface Props {
   weeks: TrainingWeek[];
   coachHistory: CoachSessionLog[];
   progressContext: string;
+  goal?: string;
   onApplyChanges: (changes: SessionChange[], meta: { firstMessage: string; summary: string; incidentType?: IncidentType }) => Promise<void>;
 }
 
@@ -95,7 +96,7 @@ function missableSessionDays(weeks: TrainingWeek[]): string[] {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function CoachChat({ weeks, coachHistory, progressContext, onApplyChanges }: Props) {
+export default function CoachChat({ weeks, coachHistory, progressContext, goal, onApplyChanges }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [currentChanges, setCurrentChanges] = useState<SessionChange[]>([]);
@@ -128,6 +129,7 @@ export default function CoachChat({ weeks, coachHistory, progressContext, onAppl
         coachHistory,
         insights,
         progressContext,
+        goal: goal ?? "",
       }),
     });
     if (!res.ok) throw new Error("API error");

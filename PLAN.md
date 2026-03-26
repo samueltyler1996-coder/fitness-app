@@ -1,6 +1,6 @@
 # Fitness App — Product Plan
 
-_Last updated: 2026-03-24 (session 6)_
+_Last updated: 2026-03-26 (session 7)_
 
 ---
 
@@ -233,6 +233,15 @@ _Goal: answer the question every athlete asks — "am I on track?"_
 - [x] Weekly-updated predicted finish time shown on dashboard (with confidence range) — `RacePredictionPanel` in NowZone during race week, `RacePredictionCard` in ProgressView
 - [ ] Trend line: predicted time improving/worsening across weeks — deferred
 - [x] Hyrox equivalent: projected total time based on station benchmarks + run pace — `HyroxPredictionCard`, `predictHyroxTime()` (8 × 1km + station sum)
+
+### Phase V — World-Class Coach Knowledge Base ✓
+_Goal: make the coach genuinely knowledgeable across all domains a world-class coach must know._
+
+- [x] 8 domain research agents run: training science, nutrition, recovery, sports psychology, physiology, coaching methodology, behaviour change & mentoring, Hyrox-specific
+- [x] `lib/coachKnowledge.ts` — distilled domain knowledge + routing function (`selectKnowledgeDomains`, `getCoachKnowledge`)
+- [x] Keyword-based domain routing: selects 1-2 most relevant domains per query at inference time
+- [x] Injected into `/api/adapt-plan` and `/api/whatsapp` prompts automatically
+- [x] `goal` prop threaded through CoachZone → CoachChat → API so Hyrox routing activates for Hyrox goals
 
 ### Phase P — Proactive Coach Check-ins
 _Goal: make the app feel alive — an agentic coach that reaches out, not one that waits._

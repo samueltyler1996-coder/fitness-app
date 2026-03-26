@@ -14,6 +14,7 @@ interface Props {
   eventDate: string;
   coachHistory: CoachSessionLog[];
   progressContext: string;
+  goal?: string;
   userName: string;
   telegramChatId: string;
   whatsappPhone: string;
@@ -48,7 +49,7 @@ function sessionLabel(session: Session | null): string {
 }
 
 export default function CoachZone({
-  activeBlock, weeks, todaySession, eventDate, coachHistory, progressContext, userName,
+  activeBlock, weeks, todaySession, eventDate, coachHistory, progressContext, goal, userName,
   telegramChatId, whatsappPhone, hyroxBenchmarks, onApplyChanges, onSaveTelegramChatId, onSaveWhatsappPhone, onSaveHyroxBenchmarks,
 }: Props) {
   const [showTelegramForm, setShowTelegramForm] = useState(false);
@@ -116,6 +117,7 @@ export default function CoachZone({
             weeks={weeks}
             coachHistory={coachHistory}
             progressContext={progressContext}
+            goal={goal}
             onApplyChanges={onApplyChanges}
           />
         ) : (
